@@ -31,7 +31,7 @@ ANDROID_JAR = sorted(glob.glob(os.path.join(SDK, "platforms", "android-*", "andr
 KEYSTORE = os.path.join(HERE, "audora.keystore")
 KEY_ALIAS, KEY_PASS = "audora", "audora-local"
 MIN_SDK, TARGET_SDK = 26, 34
-VERSION_NAME = "1.2"
+VERSION_NAME = "1.3"
 
 ICON_SIZES = {"mdpi": 48, "hdpi": 72, "xhdpi": 96, "xxhdpi": 144, "xxxhdpi": 192}
 
@@ -71,6 +71,12 @@ def main():
     for d in (gen_res, gen_java, classes, dex, os.path.dirname(OUT)):
         os.makedirs(d, exist_ok=True)
 
+    # Assets = android/assets + le code partage avec le PC (web/shared), copie dans www/shared.
+    assets = os.path.join(BUILD, "assets")
+    shutil.rmtree(assets, ignore_errors=True)
+    shutil.copytree(os.path.join(HERE, "assets"), assets)
+    shutil.copytree(os.path.join(ROOT, "web", "shared"), os.path.join(assets, "www", "shared"))
+
     print("Ressources…")
     generate_icons(gen_res)
     run(tool("aapt2"), "compile", "--dir", os.path.join(HERE, "res"), "-o", os.path.join(BUILD, "res.zip"))
@@ -78,7 +84,7 @@ def main():
     base_apk = os.path.join(BUILD, "base.apk")
     version_code = int(time.time() // 60)  # toujours croissant : chaque version s'installe par-dessus la precedente
     run(tool("aapt2"), "link", "-o", base_apk, "-I", ANDROID_JAR,
-        "--manifest", os.path.join(HERE, "AndroidManifest.xml"), "-A", os.path.join(HERE, "assets"),
+        "--manifest", os.path.join(HERE, "AndroidManifest.xml"), "-A", assets,
         "--java", gen_java, "--min-sdk-version", MIN_SDK, "--target-sdk-version", TARGET_SDK,
         "--version-code", version_code, "--version-name", VERSION_NAME, "--auto-add-overlay",
         os.path.join(BUILD, "res.zip"), os.path.join(BUILD, "res-gen.zip"))

@@ -49,6 +49,7 @@ const ICONS = {
   pc: '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>',
   download: '<path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 20h14"/>',
   check: '<path d="m5 12 5 5L20 7"/>',
+  radio: '<circle cx="12" cy="12" r="2"/><path d="M8.5 8.5a5 5 0 0 0 0 7M15.5 8.5a5 5 0 0 1 0 7M5.6 5.6a9 9 0 0 0 0 12.8M18.4 5.6a9 9 0 0 1 0 12.8"/>',
   lyrics: '<path d="M4 6h10M4 10h10M4 14h6"/><circle cx="17" cy="17" r="3"/><path d="M20 17V5l-3 1"/>',
   moon: '<path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
@@ -63,23 +64,10 @@ const hydrate = (root = document) => $$("i[data-icon]", root).forEach((el) => (e
 
 // ---------- Thèmes (mêmes que sur le PC) ----------
 
-const THEMES = [
-  ["prune", "Prune", "#17121f", "#1f1929", "#2a2236", "#3a3048", "#f4effa", "#b3a8c6", "#7d7290", "#ffb547", "#2b1a00", 1],
-  ["cameleon", "Caméléon", "#141416", "#1c1c20", "#26262b", "#36363d", "#f1f1f4", "#a9a9b3", "#71717b", "#ffb547", "#111111", 1],
-  ["minuit", "Minuit", "#0f1420", "#161d2c", "#1f2839", "#2c3850", "#eef3fb", "#9fb0c8", "#67788f", "#5ad1e6", "#04232a", 1],
-  ["ocean", "Océan", "#0d1a1d", "#132428", "#1b3136", "#284449", "#e8f6f6", "#9dbcbd", "#648385", "#3ee0c5", "#03241f", 1],
-  ["foret", "Forêt", "#111a15", "#17231c", "#203027", "#2d4136", "#edf5ef", "#a3b8aa", "#6c8274", "#8fd694", "#0d2a10", 1],
-  ["braise", "Braise", "#1a1412", "#231b18", "#2e2420", "#42342e", "#f8efe9", "#c2ada2", "#86736a", "#ff8a4c", "#2e1205", 1],
-  ["rubis", "Rubis", "#141010", "#1d1717", "#282020", "#3a2e2e", "#f7eeee", "#bfa9a9", "#826d6d", "#ff5a52", "#2d0402", 1],
-  ["sakura", "Sakura", "#1c1317", "#261a20", "#33232b", "#48323d", "#fbeef3", "#c9a9b6", "#8c6f7b", "#ff8fb8", "#330a1b", 1],
-  ["neon", "Néon", "#120b1f", "#1a1030", "#251843", "#3a2766", "#f3eaff", "#b4a3d6", "#7a6a9c", "#ff4fd8", "#2b0026", 1],
-  ["graphite", "Graphite", "#151515", "#1d1d1d", "#272727", "#363636", "#f2f2f2", "#a8a8a8", "#6e6e6e", "#e8e8e8", "#111111", 1],
-  ["oled", "Noir total", "#000000", "#0a0a0a", "#161616", "#262626", "#ffffff", "#a3a3a3", "#666666", "#ffb547", "#2b1a00", 1],
-  ["cafe", "Café crème", "#f6f1ea", "#fffdf9", "#ece4d8", "#ddd2c3", "#2a211b", "#6d5f53", "#9c8e81", "#b0642a", "#fff8f0", 0],
-  ["lavande", "Lavande", "#f4f1fa", "#ffffff", "#e8e2f3", "#d6cde8", "#231c33", "#625878", "#958ba8", "#7b4fe0", "#ffffff", 0],
-  ["menthe", "Menthe", "#eef6f2", "#ffffff", "#dfece6", "#c8ddd3", "#14261e", "#4f665b", "#84998f", "#1f9e6e", "#ffffff", 0],
-  ["papier", "Papier", "#f7f7f8", "#ffffff", "#ececee", "#dcdce0", "#18181b", "#5f5f68", "#93939c", "#e2513f", "#ffffff", 0],
-];
+// Themes partages avec le PC (web/shared/themes.js), au format du telephone :
+// [id, nom, fond, panneaux, relief, lignes, texte, texte 2, texte 3, accent, texte sur accent, sombre]
+const THEMES = window.AudoraThemes.map((t) => [t.id, t.name, ...t.c.slice(0, 7),
+  t.c[7] === "chameleon" ? "#ffb547" : t.c[7], t.c[9], t.dark ? 1 : 0]);
 const themeById = (id) => THEMES.find((t) => t[0] === id) || THEMES.find((t) => t[0] === "prune");
 const activeThemeId = () => S.lib.theme_override || S.lib.theme || "prune";
 let chameleonAccent = null;  // couleur tiree de la pochette en cours
@@ -207,6 +195,18 @@ function emptyLibrary() {
 const VIEWS = {};
 const MOUNTS = {};
 
+// "Tes mix" : Mix du jour, mix par genre, Découvertes... (calculés sur le téléphone, même code que le PC).
+function mixesShelfHTML(tracks) {
+  const mixes = window.AudoraMixes ? AudoraMixes.buildMixes(tracks, { maxGenres: 3 }) : [];
+  if (!mixes.length) return "";
+  return `<h2 class="section">Tes mix</h2><div class="shelf">${mixes.map((m) => {
+    const key = register(`mix-${m.id}`, m.tracks);
+    return `<button class="card mix-card" data-action="play-all" data-list="${key}">
+      <div class="mix-art">${m.tracks.slice(0, 4).map((t) => coverHTML(t)).join("")}<span class="mix-name">${esc(m.title)}</span></div>
+      <div class="card-title">${esc(m.title)}</div><div class="card-sub">${esc(m.subtitle)}</div></button>`;
+  }).join("")}</div>`;
+}
+
 // Rangées par genre (le genre vient du PC ; choisi à la main ou trouvé automatiquement).
 function genreShelvesHTML(tracks) {
   const OTHER = "Autres";
@@ -269,6 +269,7 @@ VIEWS.home = () => {
         <button class="btn primary" data-action="play" data-list="${heroKey}" data-index="0">${icon("play")}Lecture</button></div>
     </div>
     <div class="actions" style="margin-top:14px"><button class="btn block" data-action="shuffle-all" data-list="${register("all", all)}">${icon("shuffle")}Tout en aléatoire</button></div>`;
+  html += mixesShelfHTML(all);
   html += genreShelvesHTML(all);
   if (S.lib.playlists.length) {
     html += `<h2 class="section">Playlists</h2><div class="shelf">${S.lib.playlists.map((p) => `
@@ -832,6 +833,7 @@ function trackMenu(id, playlistId = null, pindex = null) {
   openSheet(`<div class="sheet-head">${coverHTML(t)}<div style="min-width:0"><div class="row-title">${esc(t.title)}</div><div class="row-sub">${esc(t.artist)}</div></div></div>
     <button class="item" data-action="play-next" data-track="${id}">${icon("play-next")}Lire ensuite</button>
     <button class="item" data-action="add-queue" data-track="${id}">${icon("list-plus")}Ajouter à la file d'attente</button>
+    <button class="item" data-action="radio" data-track="${id}">${icon("radio")}Lancer une radio</button>
     <button class="item" data-action="pick-playlist" data-track="${id}">${icon("plus")}Ajouter à une playlist…</button>
     ${playlistId != null ? `<button class="item" data-action="playlist-remove-track" data-id="${playlistId}" data-pindex="${pindex}">${icon("close")}Retirer de cette playlist</button>` : ""}
     <button class="item" data-action="goto-artist" data-artist="${esc(t.artist)}">${icon("user")}Aller à l'artiste</button>
@@ -869,6 +871,13 @@ const ACTIONS = {
   "goto-artist": (el) => { closeSheet(); $("#player").hidden = true; go("artist", el.dataset.artist, true); },
   play: (el) => A.play(JSON.stringify(S.lists[el.dataset.list] || []), +el.dataset.index, false),
   "play-all": (el) => A.play(JSON.stringify(S.lists[el.dataset.list] || []), 0, false),
+  radio: (el) => {
+    const t = S.byId.get(+el.dataset.track);
+    if (!t) return;
+    closeSheet();
+    A.play(JSON.stringify(AudoraMixes.radio(t, S.lib.tracks).map((x) => x.id)), 0, false);
+    toast(`Radio « ${t.title} »`);
+  },
   "shuffle-all": (el) => A.play(JSON.stringify(S.lists[el.dataset.list] || []), 0, true),
   menu: (el) => trackMenu(+el.dataset.track, el.dataset.playlist != null ? +el.dataset.playlist : null, el.dataset.pindex != null ? +el.dataset.pindex : null),
   "close-sheet": (el, e) => { if (e.target === el) closeSheet(); },

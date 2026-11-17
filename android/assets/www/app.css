@@ -150,6 +150,10 @@ h2.section button { font-size: 13px; font-weight: 600; color: var(--text-2); }
 .lyric.current { color: var(--text); }
 .lyrics-plain { font: 600 17px/1.6 inherit; color: var(--text-2); }
 #btn-lyrics.on { color: var(--accent); }
+.mix-art { position: relative; display: grid; grid-template-columns: 1fr 1fr; aspect-ratio: 1; border-radius: 14px; overflow: hidden; }
+.mix-art .cover { border-radius: 0 !important; width: 100% !important; height: auto !important; aspect-ratio: 1; }
+.mix-art::after { content: ""; position: absolute; inset: 0; background: linear-gradient(to top, rgb(0 0 0 / .75), transparent 55%); }
+.mix-name { position: absolute; left: 10px; right: 10px; bottom: 9px; z-index: 1; color: #fff; font-weight: 800; font-size: 16px; line-height: 1.1; }
 .queue-label { color: var(--text-3); font-size: 12px; font-weight: 700; margin: 14px 0 6px; }
 
 /* Menus et toasts */
