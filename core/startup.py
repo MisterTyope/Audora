@@ -1,5 +1,6 @@
 """Lancement au demarrage de Windows et raccourci sur le Bureau."""
 
+import ctypes
 import os
 import sys
 
@@ -67,8 +68,45 @@ def desktop_folder():
     return shell.SHGetFolderPath(0, shellcon.CSIDL_DESKTOPDIRECTORY, None, 0)  # suit OneDrive si redirige
 
 
-def create_desktop_shortcut(target=None, arguments="", app_id=None):
-    """Cree (ou remplace) "Audora.lnk" sur le Bureau. Par defaut : l'Audora en cours."""
+START_MENU = os.path.join(os.environ.get("APPDATA", ""), r"Microsoft\Windows\Start Menu\Programs")
+
+
+def _shortcut_target(path):
+    """Programme vise par un raccourci .lnk (None s'il est illisible)."""
+    try:
+        import pythoncom
+        from win32com.shell import shell
+        link = pythoncom.CoCreateInstance(shell.CLSID_ShellLink, None, pythoncom.CLSCTX_INPROC_SERVER, shell.IID_IShellLink)
+        link.QueryInterface(pythoncom.IID_IPersistFile).Load(path)
+        return link.GetPath(0)[0]
+    except Exception:
+        return None
+
+
+def ensure_start_menu_shortcut(app_id):
+    """Raccourci du menu Demarrer vers l'Audora en cours, avec son identifiant.
+
+    Windows prend l'icone du bouton de la barre des taches dans le raccourci qui porte
+    l'identifiant d'Audora : sans lui, ou s'il vise un Audora supprime (ancienne
+    installation), le bouton affiche une page blanche au lieu du vinyle.
+    """
+    if not config.IS_FROZEN or sys.platform != "win32":
+        return None
+    target = os.path.normcase(os.path.abspath(sys.executable))
+    for existing in (os.path.join(START_MENU, "Audora", "Audora.lnk"), os.path.join(START_MENU, "Audora.lnk")):
+        aim = _shortcut_target(existing) if os.path.exists(existing) else None
+        if aim and os.path.normcase(os.path.abspath(aim)) == target:
+            return existing  # deja bon (installateur, ou lancement precedent)
+    path = create_desktop_shortcut(app_id=app_id, path=os.path.join(START_MENU, "Audora.lnk"))
+    try:
+        ctypes.windll.shell32.SHChangeNotify(0x08000000, 0, None, None)  # SHCNE_ASSOCCHANGED : icones rafraichies
+    except Exception:
+        pass
+    return path
+
+
+def create_desktop_shortcut(target=None, arguments="", app_id=None, path=None):
+    """Cree (ou remplace) "Audora.lnk" sur le Bureau (ou a `path`). Par defaut : l'Audora en cours."""
     import pythoncom
     from win32com.propsys import propsys, pscon
     from win32com.shell import shell
@@ -91,6 +129,6 @@ def create_desktop_shortcut(target=None, arguments="", app_id=None):
         store = link.QueryInterface(propsys.IID_IPropertyStore)
         store.SetValue(pscon.PKEY_AppUserModel_ID, propsys.PROPVARIANTType(app_id))
         store.Commit()
-    path = os.path.join(desktop_folder(), "Audora.lnk")
+    path = path or os.path.join(desktop_folder(), "Audora.lnk")
     link.QueryInterface(pythoncom.IID_IPersistFile).Save(path, 0)
     return path

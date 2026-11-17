@@ -521,6 +521,14 @@ class App:
         self.hide_to_tray()  # Alt+F4 ou "Fermer la fenetre" : meme comportement que la croix
         return False
 
+    def _ensure_shortcut(self):
+        try:
+            import pythoncom
+            pythoncom.CoInitialize()
+            startup.ensure_start_menu_shortcut(APP_ID)
+        except Exception:
+            journal.log.exception("Raccourci du menu Demarrer impossible")
+
     def toggle_mini(self):
         if self.mini is not None:
             self.mini.toggle()
@@ -645,6 +653,7 @@ class App:
         self._start_tray()
         threading.Thread(target=self._initial_scan, daemon=True).start()
         threading.Thread(target=startup.refresh_autostart_command, daemon=True).start()
+        threading.Thread(target=self._ensure_shortcut, daemon=True).start()
         if self.config.get("phone_sync"):
             self.phone.start()
         webview.start(private_mode=False, storage_path=config.WEBVIEW_STORAGE, icon=config.ICON_PATH)
