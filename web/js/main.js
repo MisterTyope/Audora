@@ -19,6 +19,11 @@ window.onBackendEvent = (name, payload) => {
     case "phone_changed": refreshPhone(); break;
     case "toast": toast(payload?.message || ""); break;
     case "player_action": runPlayerAction(payload || {}); break;
+    case "mini":
+      S.miniOpen = !!payload?.open;
+      $("#btn-mini").classList.toggle("on", S.miniOpen);
+      if (S.miniOpen) pushMiniState(true);
+      break;
     case "window_state": updateMaximizeButton(payload?.maximized); break;
   }
 };
@@ -32,9 +37,10 @@ function frequentTracks() {
     .sort((a, b) => (b.play_count - a.play_count) || ((b.last_played || 0) - (a.last_played || 0)));
 }
 
-function runPlayerAction({ action, track }) {
+function runPlayerAction({ action, track, fraction }) {
   switch (action) {
     case "toggle": togglePlay(); break;
+    case "seek": if (isFinite(media.duration)) media.currentTime = (fraction || 0) * media.duration; break;
     case "next": next(); break;
     case "prev": prev(); break;
     case "shuffle":

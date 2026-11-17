@@ -539,7 +539,7 @@ body.reordering, body.reordering * { cursor: grabbing !important; user-select: n
 .np-backdrop::after { content: ""; position: absolute; inset: 0; background: radial-gradient(circle at 50% 40%, transparent, color-mix(in srgb, var(--bg) 70%, transparent)); }
 .np-close { position: absolute; top: 18px; left: 22px; z-index: 2; }
 .np-lyrics-btn { position: absolute; top: 18px; right: 22px; z-index: 2; }
-.np-lyrics-btn.on, #btn-lyrics.on { color: var(--accent); }
+.np-lyrics-btn.on, #btn-lyrics.on, #btn-mini.on { color: var(--accent); }
 .nowplaying.with-lyrics { padding-right: min(46vw, 600px); transition: padding .3s ease; }
 .nowplaying.with-lyrics .np-cover { width: min(42vh, 380px); }
 .np-lyrics {

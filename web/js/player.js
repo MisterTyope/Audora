@@ -345,6 +345,7 @@ function updateNowPlaying() {
   $("#np-stage").classList.toggle("is-video", t?.kind === "video");
   $("#np-backdrop").style.backgroundImage = t?.cover ? `url("${coverUrl(t)}")` : "none";
   document.title = t ? `${t.title} – ${t.artist}` : "Audora";
+  pushMiniState(true);
 }
 
 function markPlayingRows() {
@@ -458,6 +459,40 @@ function renderQueue() {
 
 // --- Couleur d'ambiance tirée de la pochette ---
 
+// ---------- Mini-lecteur : on lui envoie l'état du lecteur ----------
+
+let miniPushAt = 0;
+let colorProbe = null;
+
+/** Couleur d'une variable du thème, calculée (Caméléon : la couleur réelle, pas la formule). */
+function resolvedColor(name) {
+  if (!colorProbe) {
+    colorProbe = document.createElement("span");
+    colorProbe.hidden = true;
+    document.body.append(colorProbe);
+  }
+  colorProbe.style.color = `var(${name})`;
+  return getComputedStyle(colorProbe).color;
+}
+
+function pushMiniState(force = false) {
+  if (!S.miniOpen) return;
+  const now = performance.now();
+  if (!force && now - miniPushAt < 1000) return;
+  miniPushAt = now;
+  const t = currentTrack();
+  const [r, g, b] = PALETTE[hashStr(t?.artist || t?.title || "") % PALETTE.length];
+  api("mini_state", {
+    id: t?.id ?? null, title: t?.title || "", artist: t?.artist || "",
+    cover: t?.cover ? coverUrl(t) : null,
+    fallback: `linear-gradient(135deg, rgb(${r} ${g} ${b} / .9), rgb(${r} ${g} ${b} / .3))`,
+    playing: !!t && !media.paused, position: media.currentTime || 0,
+    duration: isFinite(media.duration) ? media.duration : (t?.duration || 0),
+    colors: Object.fromEntries(["--bg", "--panel", "--raise", "--text", "--text-2", "--accent", "--accent-ink"]
+      .map((n) => [n, resolvedColor(n)])),
+  }).catch(() => {});
+}
+
 function setAmbientRGB(r, g, b) {
   const max = Math.max(r, g, b);
   if (max < 130) {
@@ -465,6 +500,7 @@ function setAmbientRGB(r, g, b) {
     r *= f; g *= f; b *= f;
   }
   document.documentElement.style.setProperty("--ambient", `${Math.min(255, r) | 0} ${Math.min(255, g) | 0} ${Math.min(255, b) | 0}`);
+  pushMiniState(true);  // Caméléon : la nouvelle couleur part aussi au mini-lecteur
 }
 
 function setAmbient(t) {
@@ -564,8 +600,12 @@ function bindPlayer() {
   media.addEventListener("timeupdate", updateTime);
   media.addEventListener("timeupdate", crossfadeTick);
   media.addEventListener("timeupdate", syncLyrics);
+  media.addEventListener("timeupdate", () => pushMiniState());
+  media.addEventListener("seeked", () => pushMiniState(true));
+  media.addEventListener("playing", () => pushMiniState(true));
   media.addEventListener("play", () => { errorStreak = 0; applyTrackGain(); updatePlayState(); });
   media.addEventListener("pause", () => {
+    pushMiniState(true);
     if (fade && !media.ended) cancelCrossfade();  // pause pendant un fondu : on l'abandonne
     updatePlayState();
     saveSession();

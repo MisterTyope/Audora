@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Audora — mini-lecteur</title>
+<style>
+  /* Couleurs envoyees par la fenetre principale (theme en cours, Cameleon compris). */
+  :root { --bg: #17121f; --panel: #1f1929; --raise: #2a2236; --text: #f4effa; --text-2: #b3a8c6; --accent: #ffb547; --accent-ink: #2b1a00; color-scheme: dark; }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { height: 100%; overflow: hidden; }
+  body {
+    font: 500 13px/1.3 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; color: var(--text); user-select: none;
+    background: radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--accent) 22%, var(--bg)), var(--bg) 70%);
+  }
+  button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; display: grid; place-items: center; }
+  svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+  .filled { fill: currentColor; stroke: none; }
+  .icon-btn { width: 34px; height: 34px; border-radius: 50%; color: var(--text-2); }
+  .icon-btn:hover { color: var(--text); background: color-mix(in srgb, var(--text) 10%, transparent); }
+  .play { width: 40px; height: 40px; border-radius: 50%; background: var(--text); color: var(--bg); }
+  .play:hover { transform: scale(1.06); }
+  .play svg { width: 18px; height: 18px; }
+  .tiny { width: 24px; height: 24px; border-radius: 6px; color: var(--text-2); opacity: .7; }
+  .tiny:hover { opacity: 1; background: color-mix(in srgb, var(--text) 12%, transparent); }
+  .tiny svg { width: 14px; height: 14px; }
+  .cover { border-radius: 10px; overflow: hidden; background: var(--raise); display: grid; place-items: center; flex-shrink: 0;
+    font: 800 26px "Segoe UI Variable Display", "Segoe UI", sans-serif; color: rgb(255 255 255 / .9); cursor: pointer; }
+  .cover img { width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; }
+  .title { font-weight: 700; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .artist { color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .bar { height: 4px; border-radius: 2px; background: color-mix(in srgb, var(--text) 16%, transparent); cursor: pointer; position: relative; }
+  .bar::before { content: ""; position: absolute; inset: -6px 0; }  /* zone de clic plus haute que la barre */
+  .bar span { display: block; height: 100%; width: 0; border-radius: 2px; background: var(--accent); }
+  .times { display: flex; justify-content: space-between; color: var(--text-2); font-size: 11px; font-variant-numeric: tabular-nums; }
+  .controls { display: flex; align-items: center; gap: 4px; }
+  .corner { position: absolute; top: 6px; right: 6px; display: flex; gap: 2px; z-index: 2; }
+  .empty { color: var(--text-2); }
+
+  /* --- Barre compacte --- */
+  body.bar-mode .layout { display: grid; grid-template-columns: 68px minmax(0, 1fr) auto; gap: 12px; align-items: center; height: 100%; padding: 12px; }
+  body.bar-mode .cover { width: 68px; height: 68px; }
+  body.bar-mode .meta { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  body.bar-mode .times { display: none; }
+  body.bar-mode .controls { align-self: end; }  /* en bas : les petits boutons du coin restent au-dessus */
+
+  /* --- Carre --- */
+  body.square-mode .layout { display: flex; flex-direction: column; align-items: center; gap: 10px; height: 100%; padding: 36px 18px 14px; }
+  body.square-mode .cover { width: 160px; height: 160px; border-radius: 14px; box-shadow: 0 14px 34px rgb(0 0 0 / .45); font-size: 54px; }
+  body.square-mode .meta { width: 100%; display: flex; flex-direction: column; gap: 6px; text-align: center; min-width: 0; }
+  body.square-mode .title { font-size: 15px; }
+  body.square-mode .controls { gap: 14px; }
+</style>
+</head>
+<body class="bar-mode">
+  <div class="corner">
+    <button class="tiny" id="mode" title="Changer de format"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M4 14h16"/></svg></button>
+    <button class="tiny" id="open" title="Ouvrir Audora"><svg viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-8 8M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg></button>
+    <button class="tiny" id="close" title="Fermer le mini-lecteur"><svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+  </div>
+  <div class="layout pywebview-drag-region">
+    <div class="cover" id="cover" title="Double-clic : ouvrir Audora"></div>
+    <div class="meta">
+      <div class="pywebview-drag-region"><div class="title" id="title">Audora</div><div class="artist" id="artist">Rien en lecture</div></div>
+      <div class="bar" id="bar"><span id="fill"></span></div>
+      <div class="times"><span id="cur">0:00</span><span id="dur">0:00</span></div>
+    </div>
+    <div class="controls">
+      <button class="icon-btn" data-cmd="prev" title="Précédent"><svg viewBox="0 0 24 24"><path class="filled" d="M19 5.5v13a1 1 0 0 1-1.5.86L8 13.5V18a1 1 0 0 1-2 0V6a1 1 0 0 1 2 0v4.5l9.5-5.86A1 1 0 0 1 19 5.5z"/></svg></button>
+      <button class="play" data-cmd="toggle" id="play" title="Lecture"></button>
+      <button class="icon-btn" data-cmd="next" title="Suivant"><svg viewBox="0 0 24 24"><path class="filled" d="M5 5.5v13a1 1 0 0 0 1.5.86L16 13.5V18a1 1 0 0 0 2 0V6a1 1 0 0 0-2 0v4.5L6.5 4.64A1 1 0 0 0 5 5.5z"/></svg></button>
+    </div>
+  </div>
+<script>
+"use strict";
+// Mini-lecteur : simple telecommande. La musique joue dans la fenetre principale d'Audora ;
+// elle envoie son etat ici (par Python) et on lui renvoie les commandes.
+const $ = (s) => document.querySelector(s);
+const PLAY = '<svg viewBox="0 0 24 24"><path class="filled" d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z"/></svg>';
+const PAUSE = '<svg viewBox="0 0 24 24"><rect class="filled" x="6" y="4.5" width="4" height="15" rx="1"/><rect class="filled" x="14" y="4.5" width="4" height="15" rx="1"/></svg>';
+let state = null, stamp = 0, coverKey = null;
+
+const api = (name, ...args) => window.pywebview?.api?.[name]?.(...args);
+const fmt = (s) => { s = Math.max(0, Math.floor(s || 0)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
+
+function position() {
+  if (!state) return 0;
+  const p = state.position + (state.playing ? (performance.now() - stamp) / 1000 : 0);
+  return Math.min(p, state.duration || p);
+}
+
+window.onMiniState = (s) => {
+  state = s;
+  stamp = performance.now();
+  for (const [k, v] of Object.entries(s.colors || {})) if (v) document.documentElement.style.setProperty(k, v);
+  $("#title").textContent = s.title || "Audora";
+  $("#artist").textContent = s.artist || (s.title ? "" : "Rien en lecture");
+  $("#play").innerHTML = s.playing ? PAUSE : PLAY;
+  $("#play").title = s.playing ? "Pause" : "Lecture";
+  const key = `${s.id}|${s.cover}`;
+  if (key !== coverKey) {
+    coverKey = key;
+    const box = $("#cover");
+    if (s.cover) {
+      box.style.background = "";
+      box.innerHTML = `<img src="${encodeURI(s.cover)}" alt="">`;
+    } else {
+      box.textContent = (s.title || "A").trim().charAt(0).toUpperCase();
+      box.style.background = s.fallback || "";
+    }
+  }
+};
+
+window.onMiniMode = (mode) => {
+  document.body.className = mode === "square" ? "square-mode" : "bar-mode";
+};
+
+(function tick() {
+  if (state) {
+    const p = position(), d = state.duration || 0;
+    $("#fill").style.width = d ? `${Math.min(100, (p / d) * 100)}%` : "0";
+    $("#cur").textContent = fmt(p);
+    $("#dur").textContent = fmt(d);
+  }
+  requestAnimationFrame(tick);
+})();
+
+document.addEventListener("click", (e) => {
+  const cmd = e.target.closest("[data-cmd]")?.dataset.cmd;
+  if (cmd) api("command", cmd);
+});
+$("#bar").addEventListener("click", (e) => {
+  const r = $("#bar").getBoundingClientRect();
+  api("seek", Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)));
+});
+$("#cover").addEventListener("dblclick", () => api("show_main"));
+$("#open").addEventListener("click", () => api("show_main"));
+$("#close").addEventListener("click", () => api("close"));
+$("#mode").addEventListener("click", () => api("toggle_mode"));
+document.addEventListener("keydown", (e) => {
+  if (e.key === " ") { e.preventDefault(); api("command", "toggle"); }
+  if (e.key === "Escape") api("close");
+});
+
+window.addEventListener("pywebviewready", async () => {
+  const init = await api("get_state");
+  if (init?.mode) window.onMiniMode(init.mode);
+  if (init?.state) window.onMiniState(init.state);
+});
+</script>
+</body>
+</html>

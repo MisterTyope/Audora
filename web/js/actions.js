@@ -72,6 +72,7 @@ const ACTIONS = {
   },
   "toggle-nowplaying": toggleNowPlaying,
   "toggle-lyrics": () => setLyricsOpen(!S.lyricsOpen),
+  "toggle-mini": () => api("toggle_mini"),
   "open-lyrics": () => {
     if (!currentTrack()) return;
     const np = $("#nowplaying");
@@ -380,6 +381,11 @@ document.addEventListener("keydown", (e) => {
     e.preventDefault();
     $("#search-input").focus();
     $("#search-input").select();
+    return;
+  }
+  if (e.ctrlKey && e.key.toLowerCase() === "m") {
+    e.preventDefault();
+    api("toggle_mini");
     return;
   }
   if (typing) return;

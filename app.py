@@ -62,6 +62,7 @@ from core.downloads import DownloadManager
 from core.library import Library, _move_to_recycle_bin
 from core.loudness import LoudnessAnalyzer
 from core.lyrics import LyricsFinder, lyrics_for
+from core.mini import MiniPlayer
 from core import startup
 from core.genres import FAMILY_ORDER, CoverFinder, GenreFinder
 from core.trim import LibraryTrimmer
@@ -134,6 +135,15 @@ class Api:
 
     def engine_check(self):
         engine.check_for_update(self._app.on_engine_update, force=True)
+
+    # --- Mini-lecteur ---
+
+    def toggle_mini(self):
+        self._app.toggle_mini()
+
+    def mini_state(self, state):
+        if self._app.mini is not None and isinstance(state, dict):
+            self._app.mini.push(state)
 
     # --- Paroles ---
 
@@ -268,7 +278,7 @@ class Api:
             self._app.window.maximize()
 
     def win_close(self):
-        self._app.minimize_window()
+        self._app.hide_to_tray()
 
     def win_is_maximized(self):
         return self._app.is_maximized()
@@ -392,6 +402,7 @@ class App:
         self.window = None
         self.bridge_enabled = False
         self._tray = None
+        self.mini = None  # mini-lecteur flottant (cree au lancement de la fenetre)
         self._quitting = False
         self._page_ready = threading.Event()
         self._title_bar = None
@@ -442,6 +453,8 @@ class App:
             self.quit()
         elif action == "show":
             self.show_window()
+        elif action == "mini":
+            self.toggle_mini()
         elif action in ("toggle", "next", "prev", "shuffle", "repeat"):
             self.emit("player_action", {"action": action})
         elif action.startswith("play:") and action[5:].isdigit():
@@ -479,26 +492,46 @@ class App:
     def show_window(self):
         try:
             self.window.show()
-            self.window.restore()
+            if self._is_minimized():
+                self.window.restore()
+            if self._title_bar:
+                ctypes.windll.user32.SetForegroundWindow(self._title_bar.hwnd)
         except Exception:
-            pass
+            journal.log.exception("Affichage de la fenetre impossible")
 
     def is_maximized(self):
         return bool(self._title_bar and self._title_bar.is_maximized())
 
-    def minimize_window(self):
-        # La croix reduit Audora dans la barre des taches : la musique continue.
-        # Pour quitter : clic droit sur l'icone (barre des taches ou zone de notification) > Quitter.
-        threading.Thread(target=self.window.minimize, daemon=True).start()
+    def hide_to_tray(self):
+        """La croix cache Audora : plus de bouton dans la barre des taches, seulement l'icone dans
+        les icones cachees (^) pres de l'horloge. La musique, les telechargements et la synchro
+        continuent. Clic sur l'icone : Audora revient ; clic droit > Quitter : il s'arrete vraiment."""
+        threading.Thread(target=self.window.hide, daemon=True).start()
+        if not self.config.get("tray_hint_shown") and self._tray is not None:
+            self.config.set("tray_hint_shown", True)
+            try:
+                self._tray.notify("Audora continue en arrière-plan : retrouve-le dans les icônes cachées (^), "
+                                  "près de l'horloge. Clic droit sur son icône > Quitter pour l'arrêter.", APP_TITLE)
+            except Exception:
+                pass
 
     def _on_closing(self):
         if self._quitting:
             return True
-        self.minimize_window()  # Alt+F4 ou "Fermer la fenetre" : meme comportement que la croix
+        self.hide_to_tray()  # Alt+F4 ou "Fermer la fenetre" : meme comportement que la croix
         return False
+
+    def toggle_mini(self):
+        if self.mini is not None:
+            self.mini.toggle()
 
     def quit(self, icon=None, item=None):
         self._quitting = True
+        if self.mini is not None and self.mini.window is not None:
+            try:
+                self.mini.window.destroy()  # sinon la fenetre restante garderait Audora ouvert
+            except Exception:
+                pass
         if self._tray is not None:
             self._tray.stop()
         self.window.destroy()
@@ -519,6 +552,8 @@ class App:
             pystray.MenuItem("Titre suivant", action("next")),
             pystray.MenuItem("Aléatoire", action("shuffle")),
             pystray.MenuItem("Répéter", action("repeat")),
+            pystray.Menu.SEPARATOR,
+            pystray.MenuItem("Mini-lecteur", action("mini")),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem("Quitter Audora", self.quit),
         )
@@ -597,10 +632,11 @@ class App:
         port = server.server_address[1]
 
         self._ui_url = f"http://127.0.0.1:{port}/"
+        self.mini = MiniPlayer(self, self.config, self._ui_url)
         self.window = webview.create_window(
             APP_TITLE, html=_BOOT_HTML, js_api=Api(self),
             width=1280, height=820, min_size=(960, 620), background_color=BG_COLOR,
-            minimized=_START_MINIMIZED,
+            hidden=_START_MINIMIZED,  # au demarrage du PC : directement dans les icones cachees
         )
         self.window.events.closing += self._on_closing
         self.window.events.loaded += self._on_loaded
