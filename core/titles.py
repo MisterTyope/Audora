@@ -132,6 +132,9 @@ _TAIL_NOISE = re.compile(
     r"\s*[-–]?\s*(?:need for speed[^()]*?ost|fifa \d+ soundtrack|(?:clip|video|vid[eé]o) officiel(?:le)?\b.*|"
     r"official (?:music )?video\b.*|премьера\b.*|\bost)\s*$", re.IGNORECASE)
 _QUOTED = re.compile(r'[«"“]\s*([^"”»]{2,}?)\s*[»"”]')
+_ARTIST_THEN_QUOTE = re.compile(r'^\s*([^"«“]{2,}?)\s+[«"“]\s*([^"”»]{2,}?)\s*[»"”]')
+_SEPARATOR_RE = re.compile(r"\s+[-–—|｜]\s+")
+_COMPILATION = re.compile(r"soundtrack|\bost\b|need for speed|guitar hero|\bfifa\b|\bgta\b|\bbande originale\b", re.IGNORECASE)
 _GUITAR_HERO = re.compile(r"^guitar hero[^)]*\)\s*", re.IGNORECASE)
 
 
@@ -195,7 +198,18 @@ def split_artist_title(raw_title, uploader=None, artist=None, track=None, known_
     if artist and track:
         return artist.strip(), clean_title(track) or track.strip()
 
+    # 'Linkin Park "Numb" (Official Video)' : artiste, puis titre entre guillemets.
+    quoted = _ARTIST_THEN_QUOTE.match(raw_title or "")
+    if quoted and not _split_on_separator(quoted.group(1)):
+        name = quoted.group(1).strip(" -–—|:")
+        if name:
+            return name, clean_title(quoted.group(2)) or quoted.group(2).strip()
+
     title = clean_title(raw_title)
+    # "Need for Speed Most Wanted Soundtrack - Static-X - Skinnyman" : le jeu/la BO n'est pas l'artiste.
+    parts = _SEPARATOR_RE.split(title)
+    if len(parts) >= 3 and _COMPILATION.search(parts[0]):
+        title = " - ".join(parts[1:])
     pair = _split_on_separator(title)
     if pair:
         left, right = pair

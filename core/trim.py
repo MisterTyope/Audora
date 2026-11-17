@@ -95,14 +95,23 @@ def silences(path):
 def plan_cuts(duration, segments, silent):
     """Passages a couper : [(debut, fin, categorie)], fusionnes et verifies."""
     cuts = [(max(0.0, a), min(duration, b), cat) for a, b, cat in segments if b > a]
+    # Debut et fin "reels" du morceau, une fois retires les passages parles colles aux bords :
+    # le blanc qui suit une intro parlee coupee est un blanc de debut, pas un blanc du milieu.
+    start, end = 0.0, duration
+    for a, b, _ in sorted(cuts):
+        if a <= start + 0.1:
+            start = max(start, b)
+    for a, b, _ in sorted(cuts, key=lambda c: -c[1]):
+        if b >= end - 0.1:
+            end = min(end, a)
     for a, b in silent:
         b = min(b, duration)
-        if a <= 0.05:  # blanc au tout debut
-            if b - a >= EDGE_SILENCE:
-                cuts.append((0.0, b - EDGE_KEEP, "silence_start"))
-        elif b >= duration - 0.05:  # blanc a la toute fin
-            if b - a >= EDGE_SILENCE:
-                cuts.append((a + EDGE_KEEP, duration, "silence_end"))
+        if a <= start + 0.05:  # blanc au debut
+            if b - max(a, start) >= EDGE_SILENCE:
+                cuts.append((a, b - EDGE_KEEP, "silence_start"))
+        elif b >= end - 0.05:  # blanc a la fin
+            if min(b, end) - a >= EDGE_SILENCE:
+                cuts.append((a + EDGE_KEEP, b, "silence_end"))
         elif b - a >= MIDDLE_SILENCE:
             cuts.append((a + MIDDLE_KEEP, b - MIDDLE_KEEP, "silence"))
     cuts = sorted(c for c in cuts if c[1] - c[0] >= MIN_CUT)
