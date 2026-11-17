@@ -48,8 +48,9 @@ if __name__ == "__main__" and "--action" in sys.argv:
 # est en train de se fermer, on attend qu'elle libere la place au lieu de lui passer la main.
 _RESTARTED = "--restarted" in sys.argv
 
-from core import engine  # noqa: E402
+from core import engine, journal  # noqa: E402
 
+journal.setup()  # journal des erreurs, avant tout le reste
 engine.activate()  # yt-dlp a jour (telecharge en arriere-plan), a charger avant tout import de yt_dlp
 
 import pystray  # noqa: E402
@@ -60,6 +61,7 @@ from core import search as youtube
 from core.downloads import DownloadManager
 from core.library import Library, _move_to_recycle_bin
 from core.loudness import LoudnessAnalyzer
+from core.lyrics import LyricsFinder, lyrics_for
 from core import startup
 from core.genres import FAMILY_ORDER, CoverFinder, GenreFinder
 from core.trim import LibraryTrimmer
@@ -127,6 +129,32 @@ class Api:
 
     def engine_check(self):
         engine.check_for_update(self._app.on_engine_update, force=True)
+
+    # --- Paroles ---
+
+    def get_lyrics(self, track_id, refresh=False):
+        try:
+            return lyrics_for(self._app.library, int(track_id), refresh=bool(refresh))
+        except Exception as exc:
+            journal.log.warning("Paroles indisponibles : %s", exc)
+            raise ValueError("Paroles indisponibles : pas de connexion à internet ?")
+
+    # --- Sauvegardes et journal ---
+
+    def backups_info(self):
+        return {"backups": journal.backups(), "folder": journal.BACKUP_DIR}
+
+    def backup_now(self):
+        journal.backup_library(config.DB_PATH, force=True)
+        return self.backups_info()
+
+    def open_data_folder(self, which="sauvegardes"):
+        folder = journal.BACKUP_DIR if which == "sauvegardes" else config.DATA_DIR
+        os.makedirs(folder, exist_ok=True)
+        os.startfile(folder)
+
+    def log_js_error(self, message):
+        journal.log.error("Interface : %s", str(message)[:2000])
 
     def engine_status(self):
         return engine.status()
@@ -356,6 +384,7 @@ class App:
         self.genres = GenreFinder(self.library, lambda: self.emit("library_changed"))
         self.covers = CoverFinder(self.library, lambda: self.emit("library_changed"))
         self.loudness = LoudnessAnalyzer(self.library, lambda: self.emit("library_changed"))
+        self.lyrics = LyricsFinder(self.library, lambda: None)
         self.trimmer = LibraryTrimmer(self.library, self.emit, _move_to_recycle_bin)
 
     # --- Communication avec l'interface ---
@@ -367,6 +396,7 @@ class App:
             self.genres.start()  # nouveaux artistes : on cherche leur genre
             self.covers.start()  # et les pochettes qui manquent
             self.loudness.start()  # et le volume des nouveaux titres
+            self.lyrics.start()  # et les paroles des titres du telephone
         if not self.window or not self._page_ready.is_set():
             return
         script = (f"window.onBackendEvent && window.onBackendEvent("
@@ -488,7 +518,7 @@ class App:
                     if self.taskbar:
                         self.taskbar.attach(hwnd)
                 except Exception:
-                    traceback.print_exc()
+                    journal.log.exception("Barre de titre ou barre des taches indisponible")
             self.window.load_url(self._ui_url)
             return
         if self._page_ready.is_set() and self.window.get_current_url() != self._ui_url:
@@ -510,7 +540,9 @@ class App:
         self.genres.start()
         self.covers.start()
         self.loudness.start()
+        self.lyrics.start()
         engine.check_for_update(self.on_engine_update)
+        journal.start_daily_backups(config.DB_PATH)
 
     def on_engine_update(self):
         self.emit("engine", engine.status())
@@ -572,6 +604,7 @@ def main():
         os.makedirs(config.DATA_DIR, exist_ok=True)
         with open(os.path.join(config.DATA_DIR, "erreur.log"), "a", encoding="utf-8") as f:
             f.write(traceback.format_exc() + "\n")
+        journal.log.critical("Audora n'a pas pu demarrer", exc_info=True)
         if sys.platform == "win32":
             ctypes.windll.user32.MessageBoxW(
                 0, f"Audora n'a pas pu démarrer. Le détail est dans {os.path.join(config.DATA_DIR, 'erreur.log')}.", APP_TITLE, 0x10)

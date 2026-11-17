@@ -49,6 +49,7 @@ const ICONS = {
   pc: '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>',
   download: '<path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 20h14"/>',
   check: '<path d="m5 12 5 5L20 7"/>',
+  lyrics: '<path d="M4 6h10M4 10h10M4 14h6"/><circle cx="17" cy="17" r="3"/><path d="M20 17V5l-3 1"/>',
   moon: '<path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
   edit: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="m13.5 6.5 4 4"/>',
@@ -733,6 +734,53 @@ function updateTime() {
   $("#seek").style.setProperty("--fill", `${frac * 100}%`);
   $("#t-cur").textContent = fmtTime(pos);
   $("#t-total").textContent = fmtTime(dur || current()?.duration);
+  if (!$("#lyrics").hidden) { renderLyrics(); syncLyrics(); }
+}
+
+// ---------- Paroles (recues du PC a la synchro, disponibles hors ligne) ----------
+
+const lyricsState = { id: null, lines: [], active: -1 };
+
+function parseLrc(lrc) {
+  const lines = [];
+  for (const raw of (lrc || "").split(/\r?\n/)) {
+    const stamps = [...raw.matchAll(/\[(\d+):(\d+(?:\.\d+)?)\]/g)];
+    const text = raw.replace(/\[[^\]]*\]/g, "").trim();
+    for (const m of stamps) lines.push({ t: +m[1] * 60 + +m[2], text });
+  }
+  return lines.sort((a, b) => a.t - b.t);
+}
+
+function renderLyrics() {
+  const t = current();
+  const box = $("#lyrics");
+  if (!t || box.hidden) return;
+  if (lyricsState.id === t.id) return;
+  lyricsState.id = t.id;
+  lyricsState.active = -1;
+  let found = null;
+  try { found = JSON.parse(A.lyrics ? A.lyrics(t.id) || "null" : "null"); } catch { found = null; }
+  const lines = parseLrc(found?.synced).filter((l, i, all) => l.text || (all[i + 1] && all[i + 1].t - l.t > 4));
+  lyricsState.lines = lines;
+  box.innerHTML = lines.length
+    ? lines.map((l, i) => `<button class="lyric" data-action="lyric-seek" data-index="${i}">${l.text ? esc(l.text) : "♪"}</button>`).join("")
+    : found?.plain
+      ? `<div class="lyrics-plain">${esc(found.plain).replace(/\n/g, "<br>")}</div>`
+      : `<p class="hint" style="text-align:center;margin-top:30vh">Pas de paroles pour ce titre.<br>Elles arrivent du PC à la synchronisation.</p>`;
+  syncLyrics();
+}
+
+function syncLyrics() {
+  const lines = lyricsState.lines;
+  if (!lines.length || $("#lyrics").hidden) return;
+  const pos = (S.player.position || 0) / 1000 + 0.3;
+  let index = -1;
+  for (let i = 0; i < lines.length && lines[i].t <= pos; i++) index = i;
+  if (index === lyricsState.active) return;
+  lyricsState.active = index;
+  const els = $$("#lyrics .lyric");
+  els.forEach((el, i) => { el.classList.toggle("current", i === index); el.classList.toggle("past", i < index); });
+  els[index]?.scrollIntoView({ block: "center", behavior: "smooth" });
 }
 
 function renderQueue() {
@@ -849,11 +897,26 @@ const ACTIONS = {
   shuffle: () => A.command("shuffle", 0),
   repeat: () => A.command("repeat", 0),
   jump: (el) => A.command("jump", +el.dataset.index),
-  "open-player": () => { $("#player").hidden = false; $("#queue").hidden = true; $("#player-body").hidden = false; },
+  "open-player": () => { $("#player").hidden = false; $("#queue").hidden = true; $("#lyrics").hidden = true; $("#player-body").hidden = false; },
+  "toggle-lyrics": () => {
+    const l = $("#lyrics");
+    l.hidden = !l.hidden;
+    $("#queue").hidden = true;
+    $("#player-body").hidden = !l.hidden;
+    $("#btn-lyrics").classList.toggle("on", !l.hidden);
+    lyricsState.id = null;
+    renderLyrics();
+  },
+  "lyric-seek": (el) => {
+    const line = lyricsState.lines[+el.dataset.index];
+    if (line) A.command("seek", Math.round(line.t * 1000));
+  },
   "close-player": () => { $("#player").hidden = true; },
   "toggle-queue": () => {
     const q = $("#queue");
     q.hidden = !q.hidden;
+    $("#lyrics").hidden = true;
+    $("#btn-lyrics").classList.remove("on");
     $("#player-body").hidden = !q.hidden;
     if (!q.hidden) renderQueue();
   },

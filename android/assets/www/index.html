@@ -32,6 +32,7 @@
       <button class="icon-btn" data-action="close-player" aria-label="Réduire"><i data-icon="down"></i></button>
       <span class="player-label">Lecture en cours<span class="sleep-status" id="sleep-status"></span></span>
       <span>
+        <button class="icon-btn" id="btn-lyrics" data-action="toggle-lyrics" aria-label="Paroles"><i data-icon="lyrics"></i></button>
         <button class="icon-btn" id="btn-sleep" data-action="sleep" aria-label="Minuterie de sommeil"><i data-icon="moon"></i></button>
         <button class="icon-btn" data-action="toggle-queue" aria-label="File d'attente"><i data-icon="queue"></i></button>
       </span>
@@ -53,6 +54,7 @@
       </div>
     </div>
     <div class="queue" id="queue" hidden></div>
+    <div class="lyrics" id="lyrics" hidden></div>
   </section>
 
   <div id="sheet-root"></div>

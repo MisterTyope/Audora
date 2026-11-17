@@ -7,6 +7,7 @@ et les blancs.
 """
 
 import json
+import logging
 import os
 import re
 import shutil
@@ -21,6 +22,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from mutagen import File as MutagenFile
 
+log = logging.getLogger("audora")
 SPONSORBLOCK_URL = "https://sponsor.ajay.app/api/skipSegments"
 # Tout ce qui n'est pas de la musique dans un clip.
 CATEGORIES = ["music_offtopic", "intro", "outro", "sponsor", "selfpromo", "interaction", "preview"]
@@ -252,6 +254,7 @@ class LibraryTrimmer:
                 self._library.set_trim_state(result["id"], "trimmed", duration)
                 applied += 1
             except Exception as exc:
+                log.warning("Decoupe impossible pour %s : %s", path, exc)
                 if os.path.exists(tmp):
                     os.remove(tmp)
                 with self._lock:

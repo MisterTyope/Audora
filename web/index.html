@@ -69,6 +69,8 @@
   <section class="nowplaying" id="nowplaying" aria-label="Lecture en cours" hidden>
     <div class="np-backdrop" id="np-backdrop"></div>
     <button class="icon-btn np-close" data-action="toggle-nowplaying" aria-label="Réduire"><i data-icon="chevron-down"></i></button>
+    <button class="btn small np-lyrics-btn" id="np-lyrics-btn" data-action="toggle-lyrics"><i data-icon="lyrics"></i>Paroles</button>
+    <div class="np-lyrics" id="np-lyrics" hidden></div>
     <div class="np-stage" id="np-stage">
       <video id="media" preload="auto" playsinline></video>
       <div class="np-cover" id="np-cover"></div>
@@ -113,6 +115,7 @@
         <span class="vol-label" id="volume-label">80 %</span>
         <input type="range" class="slider volume" id="volume" min="0" max="1000" value="928" step="1" aria-label="Volume">
       </div>
+      <button class="icon-btn" id="btn-lyrics" data-action="open-lyrics" title="Paroles" aria-label="Paroles"><i data-icon="lyrics"></i></button>
       <button class="icon-btn" id="btn-queue" data-action="toggle-queue" title="File d'attente" aria-label="File d'attente"><i data-icon="queue"></i></button>
       <button class="icon-btn" data-action="toggle-nowplaying" title="Plein écran" aria-label="Plein écran"><i data-icon="expand"></i></button>
     </div>

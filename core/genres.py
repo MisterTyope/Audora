@@ -7,6 +7,7 @@ dans la bibliotheque (table artist_genres).
 """
 
 import json
+import logging
 import re
 import threading
 import time
@@ -132,7 +133,8 @@ class CoverFinder:
                         request = urllib.request.Request(url, headers={"User-Agent": "Audora"})
                         with urllib.request.urlopen(request, timeout=15) as response:
                             data = response.read()
-                except Exception:
+                except Exception as exc:
+                    logging.getLogger("audora").warning("Deezer injoignable : %s", exc)
                     break  # pas d'internet ou Deezer indisponible : on reessaiera au prochain lancement
                 self._library.set_found_cover(track["id"], data)
                 if data:
@@ -168,7 +170,8 @@ class GenreFinder:
             for artist, title in self._library.artists_without_genre():
                 try:
                     genre = lookup(artist, title)
-                except Exception:
+                except Exception as exc:
+                    logging.getLogger("audora").warning("Deezer injoignable : %s", exc)
                     break  # pas d'internet ou Deezer indisponible : on reessaiera au prochain lancement
                 self._library.set_artist_genre(artist, genre)
                 found_since_update += 1

@@ -18,6 +18,7 @@ import hashlib
 import hmac
 import http.server
 import json
+import logging
 import os
 import re
 import secrets
@@ -33,6 +34,7 @@ from . import config
 from . import search as youtube
 from . import tls
 
+log = logging.getLogger("audora")
 SYNC_PORT = 47936
 DISCOVERY_PORT = 47937
 DISCOVERY_MESSAGE = b"AUDORA_DISCOVER"
@@ -189,6 +191,7 @@ class PhoneSync:
         try:
             self._server.tls_context = tls.server_context(f"Audora {self.pc_name()}")
         except Exception:
+            log.exception("Chiffrement de la synchro indisponible")
             self._server.tls_context = None  # sans chiffrement plutot que sans synchro
         self.error = None
         threading.Thread(target=self._server.serve_forever, daemon=True).start()
@@ -511,6 +514,12 @@ class _SyncHandler(http.server.BaseHTTPRequestHandler):
                 return
             if path == "/sync/downloads":
                 self._json(200, {"jobs": self.sync.phone_jobs()})
+                return
+            match = re.fullmatch(r"/sync/lyrics/(\d+)", path)
+            if match:
+                track_id = int(match.group(1))
+                found = self.sync._library.get_lyrics(track_id) if track_id in self.sync._library.phone_track_ids() else None
+                self._json(200 if found else 404, {"synced": (found or {}).get("synced"), "plain": (found or {}).get("plain")})
                 return
             match = re.fullmatch(r"/sync/(file|cover)/(\d+)", path)
             if match:

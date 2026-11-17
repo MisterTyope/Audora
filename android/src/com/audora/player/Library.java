@@ -32,7 +32,7 @@ public class Library {
 
     private final Context context;
     private final File file;
-    File musicDir;
+    File musicDir, lyricsDir;
     File coverDir;
     private JSONObject data;
 
@@ -70,8 +70,10 @@ public class Library {
         File root = index < roots.size() ? roots.get(index) : roots.get(0);
         musicDir = new File(root, "music");
         coverDir = new File(root, "covers");
+        lyricsDir = new File(root, "lyrics");
         musicDir.mkdirs();
         coverDir.mkdirs();
+        lyricsDir.mkdirs();
     }
 
     private static long dirSize(File dir) {
@@ -197,6 +199,11 @@ public class Library {
 
     public File coverFile(int id) {
         return new File(coverDir, id + ".jpg");
+    }
+
+    /** Paroles d'un titre (JSON {"synced", "plain"} recu du PC), pour les avoir hors ligne. */
+    public File lyricsFile(int id) {
+        return new File(lyricsDir, id + ".json");
     }
 
     public synchronized JSONObject pc() {

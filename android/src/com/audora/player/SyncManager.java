@@ -427,6 +427,22 @@ public class SyncManager {
             coversToRefresh.add(t);
             done++;
         }
+        // Paroles : telechargees quand le PC en a trouve (ou de nouvelles).
+        for (int i = 0; i < wanted.length(); i++) {
+            JSONObject t = wanted.getJSONObject(i);
+            JSONObject have = local.get(t.getInt("id"));
+            File lyricsFile = lib.lyricsFile(t.getInt("id"));
+            long version = t.optLong("lyrics", 0);
+            if (version == 0) {
+                if (lyricsFile.exists()) lyricsFile.delete();
+            } else if (!lyricsFile.exists() || have == null || have.optLong("lyrics", 0) != version) {
+                try {
+                    download(host, port, "/sync/lyrics/" + t.getInt("id"), token, lyricsFile);
+                } catch (Exception ignored) {
+                    // pas de paroles : la musique s'ecoute quand meme
+                }
+            }
+        }
         for (JSONObject t : coversToRefresh) {
             if (!t.optBoolean("cover")) continue;
             try {
@@ -454,6 +470,7 @@ public class SyncManager {
             if (!keep.contains(t.optInt("id"))) {
                 lib.audioFile(t).delete();
                 lib.coverFile(t.optInt("id")).delete();
+                lib.lyricsFile(t.optInt("id")).delete();
             }
         }
         lib.put("tracks", merged);

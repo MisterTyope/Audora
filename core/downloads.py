@@ -2,6 +2,7 @@
 
 import glob
 import json
+import logging
 import os
 import queue
 import random
@@ -23,6 +24,7 @@ from .tags import embed_cover, write_tags
 from .titles import clean_title, primary_artist_and_title, safe_filename, split_artist_title
 
 # YouTube nous prend pour un robot : pauses de plus en plus longues (secondes), sans jamais abandonner.
+log = logging.getLogger("audora")
 BOT_PAUSES = (5 * 60, 10 * 60, 20 * 60, 30 * 60)
 PACING = (4, 9)  # petite pause entre deux telechargements, pour ne pas enchainer les requetes
 _SAVED_FIELDS = ("id", "url", "format", "quality", "playlist", "start", "end", "title", "thumb",
@@ -276,6 +278,7 @@ class DownloadManager:
                             time.sleep(random.uniform(*PACING))
                     break
             except Exception as exc:  # filet de securite : le worker ne doit jamais mourir
+                log.exception("File de telechargement : %s", job.get("url"))
                 job.update(status="error", error=_short_error(str(exc)), detail="Échec")
                 self._publish(job, force=True)
 
@@ -401,6 +404,7 @@ class DownloadManager:
             job.update(status="cancelled", detail="Annulé", progress=0.0)
             self._publish(job, force=True)
         except Exception as exc:
+            log.warning("Telechargement echoue %s : %s", job.get("url"), str(exc).strip()[:500])
             job.update(status="error", error=_short_error(str(exc)), detail="Échec")
             self._publish(job, force=True)
         finally:
@@ -467,6 +471,7 @@ class DownloadManager:
                     removed = round(sum(c["end"] - c["start"] for c in found["cuts"]))
                     job["trimmed"] = job.get("trimmed", 0) + removed
             except Exception:
+                log.exception("Decoupe automatique impossible : %s", entry.get("id"))
                 trim_state = None  # en cas de souci on garde le fichier entier, il sera propose plus tard
 
         os.makedirs(folder, exist_ok=True)

@@ -90,6 +90,7 @@ const ICONS = {
   close: '<path d="M18 6 6 18M6 6l12 12"/>',
   "chevron-down": '<path d="m6 9 6 6 6-6"/>',
   "chevron-left": '<path d="m15 18-6-6 6-6"/>',
+  lyrics: '<path d="M4 6h10M4 10h10M4 14h6"/><circle cx="17" cy="17" r="3"/><path d="M20 17V5l-3 1"/>',
   more: '<circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/>',
   folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
   trash: '<path d="M4 7h16M10 11v6M14 11v6M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/>',
@@ -340,6 +341,33 @@ function renderDupes() {
         }).join("")}
       </section>`).join("")}`;
 }
+
+// ---------- Journal des erreurs de l'interface ----------
+
+window.addEventListener("error", (e) => {
+  api("log_js_error", `${e.message} (${(e.filename || "").split("/").pop()}:${e.lineno})`).catch(() => {});
+});
+window.addEventListener("unhandledrejection", (e) => {
+  const reason = e.reason?.stack || e.reason?.message || String(e.reason);
+  api("log_js_error", `Promesse : ${reason}`).catch(() => {});
+});
+
+// ---------- Sauvegardes ----------
+
+function backupSettingHTML() {
+  const b = S.backups?.backups || [];
+  return `<div class="setting-text"><div class="setting-name">Sauvegarde de la bibliothèque</div>
+      <div class="setting-value">Titres, playlists, écoutes et réglages sont copiés chaque jour (les 7 derniers jours sont gardés).
+        ${b.length ? `Dernière : ${fmtDate(b[0].date)}.` : "Première copie au prochain lancement."}</div></div>
+    <div class="actions"><button class="btn small" data-action="backup-now">Sauvegarder</button>
+      <button class="btn small" data-action="open-data" data-which="sauvegardes">${icon("folder")}Ouvrir</button></div>`;
+}
+
+MOUNTS.settings = async () => {
+  S.backups = await api("backups_info").catch(() => null);
+  const box = $("#backup-setting");
+  if (box) box.innerHTML = backupSettingHTML();
+};
 
 // ---------- Moteur YouTube (yt-dlp) ----------
 
@@ -1240,6 +1268,12 @@ VIEWS.settings = () => {
         </select>
       </div>
       <div class="panel setting" id="engine-setting">${engineSettingHTML()}</div>
+      <div class="panel setting" id="backup-setting">${backupSettingHTML()}</div>
+      <div class="panel setting">
+        <div class="setting-text"><div class="setting-name">Journal des erreurs</div>
+          <div class="setting-value">Si quelque chose ne marche pas, ce fichier (journal.log) garde la trace de ce qui s'est passé.</div></div>
+        <button class="btn small" data-action="open-data" data-which="donnees">${icon("folder")}Ouvrir</button>
+      </div>
       <div class="panel setting">
         <div class="setting-text"><div class="setting-name">Actualiser la bibliothèque</div>
           <div class="setting-value">Ajoute les fichiers copiés à la main dans le dossier et retire ceux qui ont disparu.</div></div>
@@ -1576,6 +1610,7 @@ function loadCurrent(autoplay = true, startAt = 0) {
   renderQueue();
   setAmbient(t);
   updateMediaSession(t);
+  if (S.lyricsOpen && !$("#nowplaying").hidden) loadLyrics();
   saveSession();
   if (t.kind === "video" && autoplay) openNowPlaying();
 }
@@ -1709,6 +1744,82 @@ function openNowPlaying() { $("#nowplaying").hidden = false; }
 function toggleNowPlaying() {
   if (!currentTrack()) return;
   $("#nowplaying").hidden = !$("#nowplaying").hidden;
+  if (!$("#nowplaying").hidden && S.lyricsOpen) loadLyrics();
+}
+
+// ---------- Paroles (synchronisées ligne par ligne quand c'est possible) ----------
+
+const lyricsState = { trackId: null, lines: [], active: -1 };
+
+/** "[01:02.33] texte" -> [{ t: 62.33, text }] */
+function parseLrc(lrc) {
+  const lines = [];
+  for (const raw of (lrc || "").split(/\r?\n/)) {
+    const stamps = [...raw.matchAll(/\[(\d+):(\d+(?:\.\d+)?)\]/g)];
+    const text = raw.replace(/\[[^\]]*\]/g, "").trim();
+    for (const m of stamps) lines.push({ t: +m[1] * 60 + +m[2], text });
+  }
+  return lines.sort((a, b) => a.t - b.t);
+}
+
+function setLyricsOpen(open) {
+  S.lyricsOpen = open;
+  $("#nowplaying").classList.toggle("with-lyrics", open);
+  $("#np-lyrics").hidden = !open;
+  $("#np-lyrics-btn").classList.toggle("on", open);
+  $("#btn-lyrics").classList.toggle("on", open && !$("#nowplaying").hidden);
+  if (open) loadLyrics();
+}
+
+async function loadLyrics(refresh = false) {
+  const t = currentTrack();
+  const box = $("#np-lyrics");
+  if (!t || !S.lyricsOpen) return;
+  if (lyricsState.trackId === t.id && !refresh) return;
+  lyricsState.trackId = t.id;
+  lyricsState.lines = [];
+  lyricsState.active = -1;
+  box.innerHTML = `<p class="lyrics-note">Recherche des paroles…</p>`;
+  let found;
+  try {
+    found = await api("get_lyrics", t.id, refresh);
+  } catch (e) {
+    if (lyricsState.trackId === t.id) box.innerHTML = `<p class="lyrics-note">${esc(errMsg(e))}</p>`;
+    return;
+  }
+  if (lyricsState.trackId !== t.id) return;  // la musique a changé entre-temps
+  const lines = parseLrc(found?.synced).filter((l, i, all) => l.text || (all[i + 1] && all[i + 1].t - l.t > 4));
+  if (lines.length) {
+    lyricsState.lines = lines;
+    box.innerHTML = `<div class="lyrics-lines">${lines.map((l, i) =>
+      `<button class="lyric" data-action="lyric-seek" data-index="${i}">${l.text ? esc(l.text) : "♪"}</button>`).join("")}</div>
+      <p class="lyrics-note">Paroles : LRCLIB</p>`;
+    syncLyrics();
+  } else if (found?.plain) {
+    box.innerHTML = `<div class="lyrics-plain">${esc(found.plain).replace(/\n/g, "<br>")}</div>
+      <p class="lyrics-note">Paroles non synchronisées · LRCLIB</p>`;
+  } else {
+    box.innerHTML = `<p class="lyrics-note">Pas de paroles trouvées pour ce titre${t.artist === "Artiste inconnu" ? " : indique son artiste avec « Modifier les infos »." : "."}</p>
+      <button class="btn small" data-action="lyrics-retry">Chercher à nouveau</button>`;
+  }
+}
+
+/** Ligne en cours mise en avant et gardée au centre. */
+function syncLyrics() {
+  const lines = lyricsState.lines;
+  if (!lines.length || !S.lyricsOpen || $("#nowplaying").hidden) return;
+  const now = media.currentTime + 0.25;
+  let index = -1;
+  for (let i = 0; i < lines.length && lines[i].t <= now; i++) index = i;
+  if (index === lyricsState.active) return;
+  lyricsState.active = index;
+  const box = $("#np-lyrics");
+  box.querySelectorAll(".lyric").forEach((el, i) => {
+    el.classList.toggle("current", i === index);
+    el.classList.toggle("past", i < index);
+  });
+  const el = box.querySelectorAll(".lyric")[index];
+  if (el) el.scrollIntoView({ block: "center", behavior: "smooth" });
 }
 
 function renderQueue() {
@@ -1840,6 +1951,7 @@ function bindPlayer() {
   });
   media.addEventListener("timeupdate", updateTime);
   media.addEventListener("timeupdate", crossfadeTick);
+  media.addEventListener("timeupdate", syncLyrics);
   media.addEventListener("play", () => { errorStreak = 0; applyTrackGain(); updatePlayState(); });
   media.addEventListener("pause", () => {
     if (fade && !media.ended) cancelCrossfade();  // pause pendant un fondu : on l'abandonne
@@ -2231,6 +2343,19 @@ const ACTIONS = {
     renderQueue();
   },
   "toggle-nowplaying": toggleNowPlaying,
+  "toggle-lyrics": () => setLyricsOpen(!S.lyricsOpen),
+  "open-lyrics": () => {
+    if (!currentTrack()) return;
+    const np = $("#nowplaying");
+    if (!np.hidden && S.lyricsOpen) { np.hidden = true; setLyricsOpen(false); return; }
+    np.hidden = false;
+    setLyricsOpen(true);
+  },
+  "lyric-seek": (el) => {
+    const line = lyricsState.lines[+el.dataset.index];
+    if (line) { media.currentTime = line.t; if (media.paused) media.play().catch(() => {}); }
+  },
+  "lyrics-retry": () => loadLyrics(true),
   "queue-jump": (el) => { S.qi = +el.dataset.index; loadCurrent(true); },
   "queue-remove": (el) => {
     const index = +el.dataset.index;
@@ -2305,6 +2430,13 @@ const ACTIONS = {
   "dl-clear": async () => { S.downloads = await api("clear_downloads"); renderDlList(); updateBadge(); },
 
   "open-library": () => api("open_library_folder"),
+  "backup-now": async () => {
+    S.backups = await api("backup_now");
+    const box = $("#backup-setting");
+    if (box) box.innerHTML = backupSettingHTML();
+    toast("Bibliothèque sauvegardée");
+  },
+  "open-data": (el) => api("open_data_folder", el.dataset.which),
   "engine-check": async (el) => {
     el.disabled = true;
     el.textContent = "Vérification…";

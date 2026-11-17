@@ -58,6 +58,12 @@ CREATE TABLE IF NOT EXISTS playlist_tracks (
     track_id INTEGER NOT NULL,
     position REAL NOT NULL
 );
+CREATE TABLE IF NOT EXISTS lyrics (
+    track_id INTEGER PRIMARY KEY,
+    synced TEXT,
+    plain TEXT,
+    checked_at REAL
+);
 """
 
 _COVER_EXT = {"image/png": ".png", "image/webp": ".webp"}
@@ -342,6 +348,29 @@ class Library:
     def set_loudness(self, track_id, lufs, peak):
         self._exec("UPDATE tracks SET loudness = ?, sample_peak = ? WHERE id = ?", (lufs, peak, track_id))
 
+    # --- Paroles (voir core/lyrics.py) ---
+
+    def get_track(self, track_id):
+        return self._one("SELECT id, title, artist, album, duration, path, kind FROM tracks WHERE id = ?", (track_id,))
+
+    def get_lyrics(self, track_id):
+        row = self._one("SELECT synced, plain, checked_at FROM lyrics WHERE track_id = ?", (track_id,))
+        return dict(row) if row else None
+
+    def set_lyrics(self, track_id, synced, plain):
+        self._exec("INSERT OR REPLACE INTO lyrics (track_id, synced, plain, checked_at) VALUES (?, ?, ?, ?)",
+                   (track_id, synced, plain, time.time()))
+
+    def phone_tracks_without_lyrics(self):
+        ids = self.phone_track_ids()
+        known = {r["track_id"] for r in self._all("SELECT track_id FROM lyrics")}
+        return sorted(ids - known)
+
+    def lyrics_versions(self):
+        """{track_id: version} des paroles trouvees (le telephone retelecharge si elle change)."""
+        return {r["track_id"]: int(r["checked_at"]) for r in self._all(
+            "SELECT track_id, checked_at FROM lyrics WHERE synced IS NOT NULL OR plain IS NOT NULL")}
+
     # --- Pochettes manquantes ---
 
     def tracks_without_cover(self):
@@ -513,6 +542,7 @@ class Library:
         ids = self.phone_track_ids()
         direct = {r["ref_id"] for r in self._all("SELECT ref_id FROM phone_items WHERE kind = 'track'")}
         tracks = []
+        lyrics = self.lyrics_versions()
         genres = {r["artist"]: r["genre"] for r in self._all("SELECT artist, genre FROM artist_genres WHERE genre != ''")}
         for row in self._all("SELECT id, path, title, artist, album, duration, cover, added_at, source_id, genre_override, "
                              "loudness, sample_peak FROM tracks"):
@@ -528,6 +558,7 @@ class Library:
                 "added_at": row["added_at"], "direct": row["id"] in direct, "source_id": row["source_id"],
                 "genre": row["genre_override"] or genres.get(row["artist"]), "audio_key": _audio_key(row["path"], stat), "cover_mtime": cover_mtime,
                 "gain": gain_db(row["loudness"], row["sample_peak"]),
+                "lyrics": lyrics.get(row["id"], 0),
             })
         phone_playlists = {r["ref_id"] for r in self._all("SELECT ref_id FROM phone_items WHERE kind = 'playlist'")}
         playlists = [

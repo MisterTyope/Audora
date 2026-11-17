@@ -11,6 +11,7 @@ import hashlib
 import importlib.abc
 import importlib.machinery
 import json
+import logging
 import os
 import sys
 import threading
@@ -26,6 +27,7 @@ CHECK_EVERY = 12 * 3600  # une verification toutes les 12 heures au plus
 # paquet PyPI -> module Python. yt-dlp-ejs : scripts qui resolvent les "defis" JavaScript de YouTube.
 PACKAGES = {"yt-dlp": "yt_dlp", "yt-dlp-ejs": "yt_dlp_ejs"}
 
+log = logging.getLogger("audora")
 _finders = []
 active = {}  # paquet -> version chargee depuis le dossier engine
 
@@ -87,6 +89,7 @@ def activate():
             active[package] = info["version"]
             _finders.append(finder)
         except Exception:
+            log.exception("Moteur %s %s inutilisable, retour a la copie integree", package, info.get("version"))
             # Version cassee (ou incompatible) : on l'ecarte et on garde la copie integree.
             sys.meta_path.remove(finder)
             _purge(module)
@@ -170,8 +173,8 @@ def check_for_update(on_new=None, force=False):
         for package, module in PACKAGES.items():
             try:
                 changed |= _download_latest(package, module, state)
-            except Exception:
-                pass  # pas de reseau, PyPI indisponible... : on reessaiera plus tard
+            except Exception as exc:
+                log.warning("Mise a jour de %s impossible : %s", package, exc)  # on reessaiera plus tard
         state["checked"] = time.time()
         _save_state(state)
         if changed and on_new:

@@ -271,6 +271,25 @@ public class MainActivity extends Activity implements PlayerService.Listener {
             return Library.get(MainActivity.this).storageInfo().toString();
         }
 
+        /** Paroles enregistrees d'un titre ("" s'il n'y en a pas). */
+        @JavascriptInterface
+        public String lyrics(int id) {
+            File file = Library.get(MainActivity.this).lyricsFile(id);
+            if (!file.exists()) return "";
+            try (java.io.FileInputStream in = new java.io.FileInputStream(file)) {
+                byte[] data = new byte[(int) file.length()];
+                int read = 0;
+                while (read < data.length) {
+                    int n = in.read(data, read, data.length - read);
+                    if (n < 0) break;
+                    read += n;
+                }
+                return new String(data, 0, read, java.nio.charset.StandardCharsets.UTF_8);
+            } catch (Exception e) {
+                return "";
+            }
+        }
+
         /** Meme chose sans bloquer l'interface : le resultat arrive dans l'evenement "storage". */
         @JavascriptInterface
         public void requestStorageInfo() {

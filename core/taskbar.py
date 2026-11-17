@@ -16,7 +16,7 @@ import queue
 import sys
 import threading
 import time
-import traceback
+import logging
 import uuid
 from ctypes import wintypes
 
@@ -264,13 +264,13 @@ class Taskbar:
             ensure_glyph_icons()
             self._list = _TaskbarList3()
         except Exception:
-            traceback.print_exc()
+            logging.getLogger("audora").exception("Barre des taches")
         while True:
             task = self._queue.get()
             try:
                 task()
             except Exception:
-                traceback.print_exc()
+                logging.getLogger("audora").exception("Barre des taches")
 
     def _icon(self, name):
         if name not in self._icons:

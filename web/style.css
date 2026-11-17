@@ -519,6 +519,28 @@ svg.ico.filled { fill: currentColor; stroke: none; }
 }
 .np-backdrop::after { content: ""; position: absolute; inset: 0; background: radial-gradient(circle at 50% 40%, transparent, color-mix(in srgb, var(--bg) 70%, transparent)); }
 .np-close { position: absolute; top: 18px; left: 22px; z-index: 2; }
+.np-lyrics-btn { position: absolute; top: 18px; right: 22px; z-index: 2; }
+.np-lyrics-btn.on, #btn-lyrics.on { color: var(--accent); }
+.nowplaying.with-lyrics { padding-right: min(46vw, 600px); transition: padding .3s ease; }
+.nowplaying.with-lyrics .np-cover { width: min(42vh, 380px); }
+.np-lyrics {
+  position: absolute; z-index: 1; top: 70px; bottom: 24px; right: 4vw; width: min(40vw, 540px);
+  overflow-y: auto; scrollbar-width: none; padding: 30vh 0;
+  mask-image: linear-gradient(transparent, #000 18%, #000 82%, transparent);
+}
+.np-lyrics::-webkit-scrollbar { display: none; }
+.lyrics-lines { display: flex; flex-direction: column; gap: 6px; }
+.lyric {
+  text-align: left; font: 700 clamp(19px, 1.9vw, 26px)/1.3 var(--font-display); letter-spacing: -.01em;
+  color: color-mix(in srgb, var(--text) 38%, transparent); padding: 6px 10px; border-radius: 10px;
+  transition: color .25s ease, transform .25s ease;
+}
+.lyric:hover { background: color-mix(in srgb, var(--text) 6%, transparent); }
+.lyric.past { color: color-mix(in srgb, var(--text) 55%, transparent); }
+.lyric.current { color: var(--text); transform: scale(1.02); transform-origin: left center; }
+.lyrics-plain { font: 600 18px/1.6 var(--font-body); color: var(--text-2); white-space: normal; padding: 0 10px; }
+.lyrics-note { color: var(--text-3); font-size: 13px; padding: 14px 10px; }
+@media (prefers-reduced-motion: reduce) { .lyric { transition: none; } }
 .np-stage { position: relative; z-index: 1; display: grid; place-items: center; width: min(86vw, 1100px); }
 .np-stage video { display: none; width: 100%; max-height: calc(100vh - var(--player-h) - 180px); border-radius: var(--radius-m); background: #000; }
 .np-stage.is-video video { display: block; }
