@@ -89,3 +89,61 @@ begin
   Sleep(2500);
   Result := '';
 end;
+
+// --- ffmpeg et Node.js deja presents sur ce PC ? ---
+// Audora utilise ceux du PC s'ils sont dans le PATH (Node.js 22 ou plus recent, sinon
+// yt-dlp le refuse) : inutile d'en installer une 2e copie, la case est decochee d'office.
+var
+  FfmpegOnPc, NodeOnPc: String;
+
+function NodeMajor(const Path: String): Integer;
+var
+  Code: Integer;
+  Output: TExecOutput;
+  Line: String;
+begin
+  Result := 0;
+  if ExecAndCaptureOutput(Path, '--version', '', SW_HIDE, ewWaitUntilTerminated, Code, Output)
+     and (GetArrayLength(Output.StdOut) > 0) then
+  begin
+    Line := Trim(Output.StdOut[0]);  { "v24.14.0" }
+    if (Length(Line) > 1) and (Line[1] = 'v') then
+    begin
+      Delete(Line, 1, 1);
+      if Pos('.', Line) > 0 then
+        Line := Copy(Line, 1, Pos('.', Line) - 1);
+      Result := StrToIntDef(Line, 0);
+    end;
+  end;
+end;
+
+procedure InitializeWizard;
+var
+  PathList: String;
+begin
+  PathList := GetEnv('PATH');
+  FfmpegOnPc := '';
+  if (FileSearch('ffmpeg.exe', PathList) <> '') and (FileSearch('ffprobe.exe', PathList) <> '') then
+    FfmpegOnPc := FileSearch('ffmpeg.exe', PathList);
+  NodeOnPc := FileSearch('node.exe', PathList);
+  if (NodeOnPc <> '') and (NodeMajor(NodeOnPc) < 22) then
+    NodeOnPc := '';
+  if FfmpegOnPc <> '' then
+    WizardSelectComponents('!ffmpeg');
+  if NodeOnPc <> '' then
+    WizardSelectComponents('!node');
+end;
+
+procedure CurPageChanged(CurPageID: Integer);
+begin
+  if CurPageID <> wpSelectComponents then
+    Exit;
+  { Ordre des composants : 0 = Audora, 1 = ffmpeg, 2 = Node.js }
+  if FfmpegOnPc <> '' then
+    WizardForm.ComponentsList.ItemCaption[1] := 'ffmpeg : déjà sur ce PC, inutile de le réinstaller';
+  if NodeOnPc <> '' then
+    WizardForm.ComponentsList.ItemCaption[2] := 'Node.js : déjà sur ce PC, inutile de le réinstaller';
+  { Une case decochee d'office : ce n'est plus l'installation "Complete". }
+  if (FfmpegOnPc <> '') or (NodeOnPc <> '') then
+    WizardForm.TypesCombo.ItemIndex := 2;
+end;

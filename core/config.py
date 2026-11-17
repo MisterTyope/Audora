@@ -3,6 +3,7 @@
 import json
 import os
 import shutil
+import subprocess
 import sqlite3
 import sys
 import threading
@@ -82,8 +83,25 @@ def tool_path(name):
     return bundled if os.path.exists(bundled) else shutil.which(name)
 
 
-FFMPEG = tool_path("ffmpeg")
+NODE_MIN_MAJOR = 22  # yt-dlp refuse les Node.js plus anciens
+
+
+def _node_ok(path):
+    """Node.js du PC assez recent ? (celui embarque l'est toujours)"""
+    if not path or path.startswith(TOOLS_DIR):
+        return bool(path)
+    try:
+        out = subprocess.run([path, "--version"], capture_output=True, text=True, timeout=10,
+                             creationflags=0x08000000 if sys.platform == "win32" else 0).stdout
+        return int(out.strip().lstrip("v").split(".")[0]) >= NODE_MIN_MAJOR
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return False
+
+
+FFMPEG = tool_path("ffmpeg") if tool_path("ffprobe") else None  # yt-dlp a besoin des deux
 NODE = tool_path("node")
+if not _node_ok(NODE):
+    NODE = None
 if FFMPEG:
     YTDLP_BASE_OPTS["ffmpeg_location"] = os.path.dirname(FFMPEG)
 if NODE:
