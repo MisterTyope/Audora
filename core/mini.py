@@ -76,13 +76,25 @@ class MiniPlayer:
         except Exception:
             return None, None
 
+    @staticmethod
+    def _visible(x, y, width, height):
+        """La position retenue est-elle encore sur un ecran ? (ex. 2e ecran debranche depuis)"""
+        try:
+            for screen in webview.screens:
+                sx, sy = getattr(screen, "x", 0), getattr(screen, "y", 0)
+                if sx - width // 2 <= x <= sx + screen.width - width // 2 and sy <= y <= sy + screen.height - height // 2:
+                    return True
+        except Exception:
+            return True
+        return False
+
     def open(self):
         with self._lock:
             if self.window is not None:
                 return
             width, height = SIZES[self.mode]
             pos = self._config.get("mini_pos") or []
-            x, y = (pos[0], pos[1]) if len(pos) == 2 else self._default_position(width, height)
+            x, y = (pos[0], pos[1]) if len(pos) == 2 and self._visible(pos[0], pos[1], width, height)                 else self._default_position(width, height)
             self.window = webview.create_window(
                 "Audora — mini-lecteur", url=self._ui_url + "mini.html", js_api=MiniApi(self),
                 width=width, height=height, x=x, y=y, frameless=True, easy_drag=False, on_top=True,

@@ -23,7 +23,9 @@ SWP_FRAMECHANGED = 0x0020
 SWP_FLAGS = 0x0001 | 0x0002 | 0x0004 | 0x0010 | SWP_FRAMECHANGED  # NOSIZE|NOMOVE|NOZORDER|NOACTIVATE
 
 if _IS_WINDOWS:
-    _user32 = ctypes.windll.user32
+    # Copie privee de user32 : les types d'arguments declares ici ne doivent pas s'appliquer
+    # au reste du programme (pywebview appelle SetWindowPos autrement pour deplacer ses fenetres).
+    _user32 = ctypes.WinDLL("user32")
     _LRESULT = ctypes.c_ssize_t
     _WNDPROC = ctypes.WINFUNCTYPE(_LRESULT, wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM)
     _user32.CallWindowProcW.argtypes = [ctypes.c_void_p, wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]

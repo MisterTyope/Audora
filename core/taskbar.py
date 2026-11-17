@@ -168,7 +168,7 @@ class _TaskbarList3:
 
 
 def _load_icon(path, size):
-    user32 = ctypes.windll.user32
+    user32 = ctypes.WinDLL("user32")  # copie privee : nos types d'arguments ne touchent pas le reste du programme
     user32.LoadImageW.restype = wintypes.HANDLE
     user32.LoadImageW.argtypes = [wintypes.HINSTANCE, wintypes.LPCWSTR, wintypes.UINT, ctypes.c_int, ctypes.c_int, wintypes.UINT]
     return user32.LoadImageW(None, path, 1, size, size, 0x10)  # IMAGE_ICON, LR_LOADFROMFILE
