@@ -52,3 +52,14 @@ test("la radio commence par le titre choisi et reste dans son genre", () => {
   const sameGenre = list.filter((t) => t.genre === tracks[3].genre || t.artist === tracks[3].artist).length;
   assert.ok(sameGenre >= 24, `${sameGenre} titres du même genre`);
 });
+
+test("déplacer un titre dans une liste (glisser-déposer)", async () => {
+  globalThis.document = { addEventListener() {} };  // reorder.js se branche sur la page ; ici, pas de page
+  createRequire(import.meta.url)("../web/shared/reorder.js");
+  const { move } = globalThis.AudoraReorder;
+  assert.deepEqual(move([1, 2, 3, 4, 5], 0, 3), [2, 3, 4, 1, 5]);
+  assert.deepEqual(move([1, 2, 3, 4, 5], 4, 1), [1, 5, 2, 3, 4]);
+  const list = [1, 2, 3];
+  move(list, 0, 2);
+  assert.deepEqual(list, [1, 2, 3]);  // la liste d'origine n'est pas modifiée
+});

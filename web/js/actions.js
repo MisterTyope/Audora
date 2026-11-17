@@ -4,6 +4,27 @@
 
 // ---------- Actions (délégation des clics) ----------
 
+// Glisser-deposer : file d'attente et playlists remises dans l'ordre voulu.
+document.addEventListener("reorder", async (e) => {
+  const { kind, id, from, to } = e.detail;
+  if (kind === "queue") {
+    const start = S.qi + 1;
+    S.queue = [...S.queue.slice(0, start), ...AudoraReorder.move(S.queue.slice(start), from, to)];
+    if (fade) cancelCrossfade();  // le titre suivant a peut-etre change
+    renderQueue();
+    saveSession();
+  } else if (kind === "playlist") {
+    const pl = S.playlists.find((p) => p.id === +id);
+    if (!pl) return;
+    pl.track_ids = AudoraReorder.move(pl.track_ids, from, to);
+    const scroll = $("#view").scrollTop;
+    refreshView();
+    $("#view").scrollTop = scroll;
+    try { await api("set_playlist_order", pl.id, pl.track_ids); }
+    catch (err) { toast(errMsg(err), "error"); await reloadLibrary(); }
+  }
+});
+
 const ACTIONS = {
   nav: (el) => go(el.dataset.view),
   "focus-search": () => { $("#search-input").focus(); },

@@ -365,6 +365,21 @@ public class PlayerService extends Service implements AudioManager.OnAudioFocusC
         publish();
     }
 
+    /** Deplace un titre dans la file d'attente (glisser-deposer depuis l'appli). */
+    void moveInQueue(int from, int to) {
+        handler.post(() -> {
+            if (from < 0 || to < 0 || from >= queue.size() || to >= queue.size() || from == to) return;
+            Integer id = queue.remove(from);
+            queue.add(to, id);
+            if (from == index) index = to;
+            else if (from < index && to >= index) index--;
+            else if (from > index && to <= index) index++;
+            cancelCrossfade();  // le titre suivant a peut-etre change
+            saveQueue();
+            publish();
+        });
+    }
+
     // --- Volume egalise ---
 
     private float normalization(JSONObject track) {

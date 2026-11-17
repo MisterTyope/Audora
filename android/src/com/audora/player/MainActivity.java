@@ -271,6 +271,13 @@ public class MainActivity extends Activity implements PlayerService.Listener {
             return Library.get(MainActivity.this).storageInfo().toString();
         }
 
+        /** Glisser-deposer dans la file d'attente : le titre en position `from` passe en `to`. */
+        @JavascriptInterface
+        public void moveInQueue(int from, int to) {
+            PlayerService service = PlayerService.instance;
+            if (service != null) service.moveInQueue(from, to);
+        }
+
         /** Paroles enregistrees d'un titre ("" s'il n'y en a pas). */
         @JavascriptInterface
         public String lyrics(int id) {

@@ -375,6 +375,10 @@ class Api:
     def remove_from_playlist(self, playlist_id, index):
         self._app.library.remove_from_playlist(int(playlist_id), int(index))
 
+    def set_playlist_order(self, playlist_id, track_ids):
+        """Nouvel ordre d'une playlist (glisser-deposer) ; le telephone le recoit a la synchro."""
+        self._app.library.set_playlist_tracks(int(playlist_id), [int(t) for t in track_ids])
+
 
 class App:
     def __init__(self, startup_action=None):

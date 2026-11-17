@@ -154,6 +154,13 @@ h2.section button { font-size: 13px; font-weight: 600; color: var(--text-2); }
 .mix-art .cover { border-radius: 0 !important; width: 100% !important; height: auto !important; aspect-ratio: 1; }
 .mix-art::after { content: ""; position: absolute; inset: 0; background: linear-gradient(to top, rgb(0 0 0 / .75), transparent 55%); }
 .mix-name { position: absolute; left: 10px; right: 10px; bottom: 9px; z-index: 1; color: #fff; font-weight: 800; font-size: 16px; line-height: 1.1; }
+.row.with-grip { grid-template-columns: 52px minmax(0, 1fr) 40px 32px; }
+.grip { display: grid; place-items: center; width: 32px; height: 44px; color: var(--text-3); touch-action: none; }
+.grip svg { width: 18px; height: 18px; fill: currentColor; stroke: none; }
+.queue .row { grid-template-columns: 52px minmax(0, 1fr) 32px; }
+[data-reorder-item] { transition: transform .16s ease; }
+[data-reorder-item].dragging { transition: none; position: relative; z-index: 5; background: var(--raise); border-radius: 12px; box-shadow: 0 10px 30px rgb(0 0 0 / .4); }
+body.reordering { user-select: none; -webkit-user-select: none; }
 .queue-label { color: var(--text-3); font-size: 12px; font-weight: 700; margin: 14px 0 6px; }
 
 /* Menus et toasts */

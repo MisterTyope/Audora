@@ -249,7 +249,7 @@ VIEWS.playlist = (id) => {
       </div>
     </div>
     ${tracks.length
-      ? `<div class="tracklist">${tracks.map((t, i) => rowHTML(t, key, i, { playlistIndex: i })).join("")}</div>`
+      ? `<div class="tracklist" data-reorder="playlist" data-reorder-id="${pl.id}">${tracks.map((t, i) => rowHTML(t, key, i, { playlistIndex: i, reorder: true })).join("")}</div>`
       : emptyHTML("Playlist vide", "Fais un clic droit sur un titre, puis « Ajouter à une playlist ».", "")}`;
 };
 

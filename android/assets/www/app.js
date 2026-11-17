@@ -50,6 +50,7 @@ const ICONS = {
   download: '<path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 20h14"/>',
   check: '<path d="m5 12 5 5L20 7"/>',
   radio: '<circle cx="12" cy="12" r="2"/><path d="M8.5 8.5a5 5 0 0 0 0 7M15.5 8.5a5 5 0 0 1 0 7M5.6 5.6a9 9 0 0 0 0 12.8M18.4 5.6a9 9 0 0 1 0 12.8"/>',
+  grip: '<circle cx="9" cy="6" r="1.4"/><circle cx="15" cy="6" r="1.4"/><circle cx="9" cy="12" r="1.4"/><circle cx="15" cy="12" r="1.4"/><circle cx="9" cy="18" r="1.4"/><circle cx="15" cy="18" r="1.4"/>',
   lyrics: '<path d="M4 6h10M4 10h10M4 14h6"/><circle cx="17" cy="17" r="3"/><path d="M20 17V5l-3 1"/>',
   moon: '<path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
@@ -162,13 +163,17 @@ function coverHTML(t, cls = "") {
   return `<div class="cover ${cls}"><div class="cover-fallback" style="background:linear-gradient(135deg,rgb(${r} ${g} ${b} / .9),rgb(${r} ${g} ${b} / .3))">${esc((t?.title || "?").charAt(0).toUpperCase())}</div></div>`;
 }
 
+// Poignee pour remettre les titres dans l'ordre (glisser avec le doigt, voir shared/reorder.js).
+const gripHTML = () => `<span class="grip" data-drag-handle tabindex="0" role="button" aria-label="Déplacer">${icon("grip")}</span>`;
+
 function rowHTML(t, key, i, playlistId = null) {
   const playing = S.player.track === t.id ? " playing" : "";
   const pl = playlistId != null ? ` data-playlist="${playlistId}" data-pindex="${i}"` : "";
-  return `<div class="row${playing}" data-action="play" data-list="${key}" data-index="${i}" data-track="${t.id}">
+  return `<div class="row${playing}${playlistId != null ? " with-grip" : ""}" data-action="play" data-list="${key}" data-index="${i}" data-track="${t.id}"${playlistId != null ? " data-reorder-item" : ""}>
     ${coverHTML(t)}
     <div style="min-width:0"><div class="row-title">${esc(t.title)}</div><div class="row-sub">${esc(t.artist)}</div></div>
     <button class="icon-btn" data-action="menu" data-track="${t.id}"${pl} aria-label="Plus d'options">${icon("more")}</button>
+    ${playlistId != null ? gripHTML() : ""}
   </div>`;
 }
 
@@ -353,7 +358,7 @@ VIEWS.playlist = (id) => {
       <button class="btn" data-action="shuffle-all" data-list="${key}">${icon("shuffle")}Aléatoire</button>` : ""}
       <button class="icon-btn" data-action="rename-playlist" data-id="${pl.id}" aria-label="Renommer">${icon("edit")}</button>
       <button class="icon-btn" data-action="remove-playlist" data-id="${pl.id}" aria-label="Retirer du téléphone">${icon("trash")}</button></div></div>
-    ${tracks.length ? tracks.map((t, i) => rowHTML(t, key, i, pl.id)).join("")
+    ${tracks.length ? `<div data-reorder="playlist" data-reorder-id="${pl.id}">${tracks.map((t, i) => rowHTML(t, key, i, pl.id)).join("")}</div>`
       : `<p class="muted" style="text-align:center">Ajoute des titres avec le menu ⋮ d'une chanson, puis « Ajouter à une playlist ».</p>`}`;
 };
 
@@ -738,6 +743,25 @@ function updateTime() {
   if (!$("#lyrics").hidden) { renderLyrics(); syncLyrics(); }
 }
 
+// Glisser-deposer : file d'attente et playlists remises dans l'ordre voulu.
+document.addEventListener("reorder", (e) => {
+  const { kind, id, from, to } = e.detail;
+  if (kind === "queue") {
+    const start = (S.player.index ?? -1) + 1;
+    S.player.queue = [...S.player.queue.slice(0, start), ...AudoraReorder.move(S.player.queue.slice(start), from, to)];
+    renderQueue();  // affichage immediat, le lecteur confirme juste apres
+    A.moveInQueue(start + from, start + to);
+  } else if (kind === "playlist") {
+    const pl = S.lib.playlists.find((p) => p.id === +id);
+    if (!pl) return;
+    A.updatePlaylist(pl.id, "", JSON.stringify(AudoraReorder.move(pl.track_ids, from, to)));
+    const scroll = $("#view").scrollTop;
+    loadLibrary();
+    refresh();
+    $("#view").scrollTop = scroll;
+  }
+});
+
 // ---------- Paroles (recues du PC a la synchro, disponibles hors ligne) ----------
 
 const lyricsState = { id: null, lines: [], active: -1 };
@@ -789,8 +813,8 @@ function renderQueue() {
   const i = S.player.index ?? -1;
   const upcoming = q.slice(i + 1).map((id, k) => ({ t: S.byId.get(id), index: i + 1 + k })).filter((x) => x.t);
   $("#queue").innerHTML = `<div class="queue-label">À suivre</div>` + (upcoming.length
-    ? upcoming.map(({ t, index }) => `<div class="row" data-action="jump" data-index="${index}">${coverHTML(t)}
-        <div style="min-width:0"><div class="row-title">${esc(t.title)}</div><div class="row-sub">${esc(t.artist)}</div></div><span></span></div>`).join("")
+    ? `<div data-reorder="queue">${upcoming.map(({ t, index }) => `<div class="row" data-action="jump" data-index="${index}" data-reorder-item>${coverHTML(t)}
+        <div style="min-width:0"><div class="row-title">${esc(t.title)}</div><div class="row-sub">${esc(t.artist)}</div></div>${gripHTML()}</div>`).join("")}</div>`
     : `<p class="hint">Rien après ce titre.</p>`);
 }
 

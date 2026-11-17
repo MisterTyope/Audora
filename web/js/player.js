@@ -445,15 +445,15 @@ function renderQueue() {
   }
   const upcoming = S.queue.slice(S.qi + 1).map((id, offset) => ({ t: S.byId.get(id), index: S.qi + 1 + offset })).filter((x) => x.t);
   const item = ({ t, index }, isCurrent = false) => `
-    <div class="row${isCurrent ? " playing" : ""}" role="button" tabindex="0" data-action="queue-jump" data-index="${index}" data-track="${t.id}">
-      ${coverHTML(t, "", EQ)}
+    <div class="row with-grip${isCurrent ? " playing" : ""}" role="button" tabindex="0" data-action="queue-jump" data-index="${index}" data-track="${t.id}"${isCurrent ? "" : " data-reorder-item"}>
+      ${isCurrent ? "<span></span>" : gripHTML()}${coverHTML(t, "", EQ)}
       <div class="row-main"><div class="row-title">${esc(t.title)}</div><div class="row-artist">${esc(t.artist)}</div></div>
       ${isCurrent ? "<span></span>" : `<button class="icon-btn small" data-action="queue-remove" data-index="${index}" aria-label="Retirer de la file">${icon("close")}</button>`}
     </div>`;
   box.innerHTML = `
     <div class="queue-label">En cours</div>${item({ t: cur, index: S.qi }, true)}
     <div class="queue-label">À suivre${upcoming.length ? ` (${upcoming.length})` : ""}</div>
-    ${upcoming.length ? upcoming.map((x) => item(x)).join("") : `<p class="muted" style="padding:4px 8px">Rien après ce titre.</p>`}`;
+    ${upcoming.length ? `<div data-reorder="queue">${upcoming.map((x) => item(x)).join("")}</div>` : `<p class="muted" style="padding:4px 8px">Rien après ce titre.</p>`}`;
 }
 
 // --- Couleur d'ambiance tirée de la pochette ---
