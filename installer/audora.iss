@@ -67,9 +67,6 @@ Name: "{userdesktop}\Audora"; Filename: "{app}\Audora.exe"; AppUserModelID: "Aud
 [Run]
 Filename: "{app}\Audora.exe"; Description: "Lancer Audora"; Flags: nowait postinstall
 
-[UninstallRun]
-Filename: "{cmd}"; Parameters: "/c curl -s -m 3 -X POST -H ""Content-Type: application/json"" -d ""{{\""action\"":\""quit\""}"" http://127.0.0.1:47935/action"; Flags: runhidden; RunOnceId: "QuitAudora"
-
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}"
 
@@ -88,6 +85,24 @@ begin
        '', SW_HIDE, ewWaitUntilTerminated, Code);
   Sleep(2500);
   Result := '';
+end;
+
+// Desinstallation : meme chose, et on attend qu'Audora soit vraiment ferme (sinon ses
+// fichiers, encore utilises, resteraient dans le dossier).
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+var
+  Code, Tries: Integer;
+begin
+  if CurUninstallStep <> usUninstall then
+    Exit;
+  Exec(ExpandConstant('{cmd}'), '/c curl -s -m 3 -X POST -H "Content-Type: application/json" -d "{\"action\":\"quit\"}" http://127.0.0.1:47935/action',
+       '', SW_HIDE, ewWaitUntilTerminated, Code);
+  Tries := 0;
+  while (Tries < 20) and FileExists(ExpandConstant('{app}\Audora.exe')) and not DeleteFile(ExpandConstant('{app}\Audora.exe')) do
+  begin
+    Sleep(500);
+    Tries := Tries + 1;
+  end;
 end;
 
 // --- ffmpeg et Node.js deja presents sur ce PC ? ---
