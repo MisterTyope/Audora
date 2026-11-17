@@ -10,7 +10,6 @@ import json
 import logging
 import os
 import re
-import shutil
 import subprocess
 import sys
 import threading
@@ -21,6 +20,8 @@ import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 
 from mutagen import File as MutagenFile
+
+from . import config
 
 log = logging.getLogger("audora")
 SPONSORBLOCK_URL = "https://sponsor.ajay.app/api/skipSegments"
@@ -46,7 +47,7 @@ _NO_WINDOW = 0x08000000 if sys.platform == "win32" else 0  # pas de console noir
 
 
 def ffmpeg_path():
-    return shutil.which("ffmpeg")
+    return config.FFMPEG  # celui embarque dans Audora, sinon celui du PC
 
 
 def _duration(path):

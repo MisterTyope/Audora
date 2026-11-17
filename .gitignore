@@ -12,3 +12,6 @@ android/build/
 
 # Note personnelle
 claude.txt
+
+# Programmes embarques (copies de ffmpeg et node, voir vendor_tools.py)
+vendor/

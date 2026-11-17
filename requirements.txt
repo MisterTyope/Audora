@@ -1,4 +1,5 @@
-yt-dlp[default]
+yt-dlp
+yt-dlp-ejs
 pywebview
 mutagen
 pystray

@@ -46,7 +46,8 @@ def setup():
         log.critical("Erreur fatale", exc_info=(exc_type, exc_value, exc_traceback))
         sys.__excepthook__(exc_type, exc_value, exc_traceback)
     sys.excepthook = main_hook
-    log.info("Audora demarre (%s)", "exe" if config.IS_FROZEN else "sources")
+    log.info("Audora demarre (%s) | ffmpeg : %s | node : %s", "exe" if config.IS_FROZEN else "sources",
+             config.FFMPEG or "absent", config.NODE or "absent")
 
 
 def backup_library(db_path=None, force=False):

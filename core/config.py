@@ -70,10 +70,24 @@ BRIDGE_PORT = 47935
 # analysent le HTTPS (Norton, Avast, Kaspersky...) signent les connexions avec un
 # certificat ajoute seulement au magasin Windows : on utilise donc celui de Windows.
 YTDLP_BASE_OPTS = {"compat_opts": {"no-certifi"}}
-# YouTube exige de plus en plus un moteur JavaScript pour lire ses formats : on utilise
-# Node.js s'il est installe (sinon yt-dlp fonctionne en mode degrade).
-if shutil.which("node"):
-    YTDLP_BASE_OPTS["js_runtimes"] = {"node": {}}
+
+# Programmes embarques dans le .exe (voir vendor_tools.py) : ffmpeg/ffprobe (conversion,
+# decoupe, volume) et Node.js (moteur JavaScript que YouTube exige pour donner tous ses
+# formats). A defaut (lancement depuis les sources), ceux installes sur le PC.
+TOOLS_DIR = os.path.join(RESOURCE_DIR, "bin")
+
+
+def tool_path(name):
+    bundled = os.path.join(TOOLS_DIR, name + ".exe")
+    return bundled if os.path.exists(bundled) else shutil.which(name)
+
+
+FFMPEG = tool_path("ffmpeg")
+NODE = tool_path("node")
+if FFMPEG:
+    YTDLP_BASE_OPTS["ffmpeg_location"] = os.path.dirname(FFMPEG)
+if NODE:
+    YTDLP_BASE_OPTS["js_runtimes"] = {"node": {"path": NODE}}
 
 DEFAULTS = {
     "library_folder": DEFAULT_LIBRARY,

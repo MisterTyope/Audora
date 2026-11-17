@@ -3,9 +3,13 @@ rem Construit l'appli Android (dist\Audora.apk), Audora pour Windows (dist\Audor
 rem puis l'installateur (dist\Audora-Setup-X.Y.Z.exe, avec son empreinte .sha256).
 rem L'apk est integre a Audora : la page Telephone le propose au telephone par le Wi-Fi.
 cd /d "%~dp0"
-python -m pip install --upgrade -r requirements.txt pyinstaller
+rem Installe ce qui manque ; seul yt-dlp est mis a jour (YouTube change souvent).
+python -m pip install -r requirements.txt pyinstaller
+python -m pip install --upgrade --upgrade-strategy only-if-needed yt-dlp yt-dlp-ejs
 python android\build_apk.py || goto :error
-python -m PyInstaller --noconfirm --onedir --windowed --name Audora --icon icon.ico --add-data "web;web" --add-data "icon.ico;." --add-data "dist\Audora.apk;." --add-data "dist\Audora.json;." --collect-data yt_dlp_ejs app.py || goto :error
+rem ffmpeg, ffprobe et node embarques : Audora marche aussi sur un PC qui ne les a pas.
+python vendor_tools.py || goto :error
+python -m PyInstaller --noconfirm --onedir --windowed --name Audora --icon icon.ico --add-data "web;web" --add-data "icon.ico;." --add-data "dist\Audora.apk;." --add-data "dist\Audora.json;." --add-data "vendor\bin;bin" --collect-data yt_dlp_ejs app.py || goto :error
 rmdir /s /q build 2>nul
 del Audora.spec 2>nul
 
