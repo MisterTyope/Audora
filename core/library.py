@@ -12,6 +12,7 @@ import unicodedata
 
 from . import config
 from .covers import make_cover
+from .loudness import gain_db
 from .tags import embed_cover, read_tags, write_tags
 from .titles import UNKNOWN_ARTIST, _key, clean_title, names_from_tags, primary_artist_and_title, split_artist_title, split_artists
 
@@ -131,6 +132,11 @@ class Library:
         # Pochette cherchee sur internet (trouvee ou non) : on ne la recherche pas a chaque lancement.
         if "cover_checked" not in columns:
             self._db.execute("ALTER TABLE tracks ADD COLUMN cover_checked REAL")
+            self._db.commit()
+        # Volume egalise : volume mesure (LUFS) et pic (dBFS) de chaque titre, voir loudness.py.
+        if "loudness" not in columns:
+            self._db.execute("ALTER TABLE tracks ADD COLUMN loudness REAL")
+            self._db.execute("ALTER TABLE tracks ADD COLUMN sample_peak REAL")
             self._db.commit()
 
     # --- Acces base ---
@@ -296,12 +302,14 @@ class Library:
     def list_tracks(self):
         rows = self._all(
             "SELECT t.id, t.title, t.artist, t.album, t.duration, t.kind, t.cover, t.source_id, t.added_at, "
-            "t.play_count, t.last_played, COALESCE(NULLIF(t.genre_override, ''), NULLIF(g.genre, '')) AS genre "
+            "t.play_count, t.last_played, COALESCE(NULLIF(t.genre_override, ''), NULLIF(g.genre, '')) AS genre, "
+            "t.loudness, t.sample_peak "
             "FROM tracks t LEFT JOIN artist_genres g ON g.artist = t.artist ORDER BY t.added_at DESC"
         )
         for row in rows:
             cover = row.pop("cover")
             row["cover"] = bool(cover and os.path.exists(cover))
+            row["gain"] = gain_db(row.pop("loudness"), row.pop("sample_peak"))
         return rows
 
     def frequent_tracks(self, limit=8):
@@ -320,9 +328,19 @@ class Library:
 
     def set_trim_state(self, track_id, state, duration=None):
         if duration:
-            self._exec("UPDATE tracks SET trim_state = ?, duration = ? WHERE id = ?", (state, duration, track_id))
+            # Fichier recoupe : son volume sera remesure.
+            self._exec("UPDATE tracks SET trim_state = ?, duration = ?, loudness = NULL WHERE id = ?",
+                       (state, duration, track_id))
         else:
             self._exec("UPDATE tracks SET trim_state = ? WHERE id = ?", (state, track_id))
+
+    # --- Volume egalise ---
+
+    def tracks_without_loudness(self):
+        return self._all("SELECT id, path FROM tracks WHERE kind = 'audio' AND loudness IS NULL ORDER BY added_at DESC")
+
+    def set_loudness(self, track_id, lufs, peak):
+        self._exec("UPDATE tracks SET loudness = ?, sample_peak = ? WHERE id = ?", (lufs, peak, track_id))
 
     # --- Pochettes manquantes ---
 
@@ -496,7 +514,8 @@ class Library:
         direct = {r["ref_id"] for r in self._all("SELECT ref_id FROM phone_items WHERE kind = 'track'")}
         tracks = []
         genres = {r["artist"]: r["genre"] for r in self._all("SELECT artist, genre FROM artist_genres WHERE genre != ''")}
-        for row in self._all("SELECT id, path, title, artist, album, duration, cover, added_at, source_id, genre_override FROM tracks"):
+        for row in self._all("SELECT id, path, title, artist, album, duration, cover, added_at, source_id, genre_override, "
+                             "loudness, sample_peak FROM tracks"):
             if row["id"] not in ids or not os.path.exists(row["path"]):
                 continue
             stat = os.stat(row["path"])
@@ -508,6 +527,7 @@ class Library:
                 "cover": bool(row["cover"] and os.path.exists(row["cover"])),
                 "added_at": row["added_at"], "direct": row["id"] in direct, "source_id": row["source_id"],
                 "genre": row["genre_override"] or genres.get(row["artist"]), "audio_key": _audio_key(row["path"], stat), "cover_mtime": cover_mtime,
+                "gain": gain_db(row["loudness"], row["sample_peak"]),
             })
         phone_playlists = {r["ref_id"] for r in self._all("SELECT ref_id FROM phone_items WHERE kind = 'playlist'")}
         playlists = [

@@ -59,6 +59,7 @@ from PIL import Image  # noqa: E402
 from core import search as youtube
 from core.downloads import DownloadManager
 from core.library import Library, _move_to_recycle_bin
+from core.loudness import LoudnessAnalyzer
 from core import startup
 from core.genres import FAMILY_ORDER, CoverFinder, GenreFinder
 from core.trim import LibraryTrimmer
@@ -180,13 +181,20 @@ class Api:
         if kind not in ("track", "playlist"):
             raise ValueError("Type inconnu")
         self._app.library.phone_add(kind, [int(i) for i in ids])
+        if kind == "playlist":
+            self._app.phone.note_playlists([int(i) for i in ids], sent=True)
         return self._app.library.phone_items()
 
     def phone_unsend(self, kind, ids):
         if kind not in ("track", "playlist"):
             raise ValueError("Type inconnu")
         self._app.library.phone_remove(kind, [int(i) for i in ids])
+        if kind == "playlist":
+            self._app.phone.note_playlists([int(i) for i in ids], sent=False)
         return self._app.library.phone_items()
+
+    def phone_all_playlists(self, enabled):
+        return self._app.phone.set_all_playlists(enabled)
 
     def set_autostart(self, enabled):
         return startup.set_autostart(bool(enabled))
@@ -295,6 +303,7 @@ class Api:
     def phone_unsend_all(self):
         """Retire toutes les musiques du telephone : il les efface a sa prochaine synchro."""
         items = self._app.library.phone_items()
+        self._app.config.set("phone_all_playlists", False)  # sinon elles reviendraient a la synchro suivante
         self._app.library.phone_remove("track", items["tracks"])
         self._app.library.phone_remove("playlist", items["playlists"])
         return self._app.library.phone_items()
@@ -346,6 +355,7 @@ class App:
         self.phone = PhoneSync(self.library, self.config, self.emit, self.downloads)
         self.genres = GenreFinder(self.library, lambda: self.emit("library_changed"))
         self.covers = CoverFinder(self.library, lambda: self.emit("library_changed"))
+        self.loudness = LoudnessAnalyzer(self.library, lambda: self.emit("library_changed"))
         self.trimmer = LibraryTrimmer(self.library, self.emit, _move_to_recycle_bin)
 
     # --- Communication avec l'interface ---
@@ -356,6 +366,7 @@ class App:
         if name == "library_changed":
             self.genres.start()  # nouveaux artistes : on cherche leur genre
             self.covers.start()  # et les pochettes qui manquent
+            self.loudness.start()  # et le volume des nouveaux titres
         if not self.window or not self._page_ready.is_set():
             return
         script = (f"window.onBackendEvent && window.onBackendEvent("
@@ -498,6 +509,7 @@ class App:
         self.emit("library_changed")
         self.genres.start()
         self.covers.start()
+        self.loudness.start()
         engine.check_for_update(self.on_engine_update)
 
     def on_engine_update(self):

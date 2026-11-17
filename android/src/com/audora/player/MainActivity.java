@@ -311,6 +311,12 @@ public class MainActivity extends Activity implements PlayerService.Listener {
             if ("theme_override".equals(key)) lib.put(key, value);
             else if ("auto_sync".equals(key)) lib.put(key, "true".equals(value));
             else if ("crossfade".equals(key)) lib.put(key, Integer.parseInt(value));
+            else if ("normalize".equals(key) || "spatial".equals(key)) {
+                lib.put(key, "true".equals(value));
+                lib.save();
+                if (PlayerService.instance != null) PlayerService.instance.refreshGain();
+                return;
+            }
             else if ("background_sync".equals(key)) {
                 lib.put(key, "true".equals(value));
                 SyncJobService.schedule(MainActivity.this, "true".equals(value));

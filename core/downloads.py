@@ -346,9 +346,11 @@ class DownloadManager:
             # On espace les titres d'une playlist, sinon YouTube bloque au bout de quelques-uns.
             opts.update(sleep_interval=PACING[0], max_sleep_interval=PACING[1], sleep_interval_requests=0.75)
         if job["format"] == "mp3":
-            opts["format"] = "bestaudio/best"
+            # Meilleure piste audio de YouTube (Opus ~160 kbps en general), sans passer par la video.
+            opts["format"] = "bestaudio[acodec=opus]/bestaudio/best"
             opts["postprocessors"] = [
-                {"key": "FFmpegExtractAudio", "preferredcodec": "mp3", "preferredquality": "192"},
+                # "0" = MP3 VBR qualite maximale (~245 kbps) : la conversion ne perd plus rien d'audible.
+                {"key": "FFmpegExtractAudio", "preferredcodec": "mp3", "preferredquality": "0"},
             ]
         else:
             opts["format"] = _video_format(job["quality"])

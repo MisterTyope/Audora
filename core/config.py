@@ -83,12 +83,18 @@ DEFAULTS = {
     "theme": "prune",
     "organize_by_artist": True,
     "trim_audio": True,  # couper blancs et passages parles des nouveaux telechargements
+    "normalize_volume": True,  # volume egalise entre les morceaux
+    "spatial": False,  # mode Spatial : image stereo elargie
+    "crossfade": 0,  # fondu enchaine en secondes (0 = desactive)
+    "phone_all_playlists": False,  # toutes les playlists vont sur le telephone automatiquement
+    "phone_playlists_excluded": [],  # ... sauf celles retirees a la main
     "tray_hint_shown": False,
     "session": None,
 }
 
 # Cles que l'interface a le droit de modifier directement.
-EDITABLE_KEYS = {"format", "quality", "volume", "organize_by_artist", "session", "theme", "trim_audio"}
+EDITABLE_KEYS = {"format", "quality", "volume", "organize_by_artist", "session", "theme", "trim_audio",
+                 "normalize_volume", "crossfade", "spatial"}
 
 
 class Config:

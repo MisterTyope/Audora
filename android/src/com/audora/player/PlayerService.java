@@ -19,6 +19,9 @@ import android.media.AudioFocusRequest;
 import android.media.AudioManager;
 import android.media.MediaMetadata;
 import android.media.MediaPlayer;
+import android.media.audiofx.AudioEffect;
+import android.media.audiofx.LoudnessEnhancer;
+import android.media.audiofx.Virtualizer;
 import android.media.session.MediaSession;
 import android.media.session.PlaybackState;
 import android.os.Build;
@@ -89,6 +92,13 @@ public class PlayerService extends Service implements AudioManager.OnAudioFocusC
     private MediaPlayer nextPlayer;
     private boolean nextPrepared = false;
     private boolean fading = false;
+
+    // Volume egalise : correction (dB) mesuree par le PC pour chaque titre. Baisser = setVolume ;
+    // monter = LoudnessEnhancer (avec son limiteur, pas de saturation).
+    private float playerVol = 1f, nextVol = 1f;
+    private LoudnessEnhancer enhancer, nextEnhancer;
+    // Mode Spatial : image stereo elargie (effet Virtualizer d'Android, surtout au casque).
+    private Virtualizer virtualizer, nextVirtualizer;
     private int nextIndex = -1;
     private long fadeStart = 0;
 
@@ -182,6 +192,10 @@ public class PlayerService extends Service implements AudioManager.OnAudioFocusC
 
     @Override
     public void onDestroy() {
+        releaseEnhancer(enhancer);
+        releaseEnhancer(nextEnhancer);
+        releaseEnhancer(virtualizer);
+        releaseEnhancer(nextVirtualizer);
         saveQueue();
         try { unregisterReceiver(noisyReceiver); } catch (Exception ignored) { }
         handler.removeCallbacks(ticker);
@@ -309,6 +323,10 @@ public class PlayerService extends Service implements AudioManager.OnAudioFocusC
         }
         File file = Library.get(this).audioFile(track);
         cancelCrossfade();
+        releaseEnhancer(enhancer);
+        enhancer = null;
+        releaseEnhancer(virtualizer);
+        virtualizer = null;
         if (player != null) player.release();
         prepared = false;
         playWhenReady = autoplay;
@@ -318,6 +336,11 @@ public class PlayerService extends Service implements AudioManager.OnAudioFocusC
                 .setUsage(AudioAttributes.USAGE_MEDIA)
                 .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build());
         player.setWakeMode(this, PowerManager.PARTIAL_WAKE_LOCK);
+        float db = normalization(track);
+        playerVol = attenuation(db);
+        enhancer = boost(player, db);
+        virtualizer = spatial(player);
+        player.setVolume(playerVol, playerVol);
         player.setOnPreparedListener(mp -> {
             prepared = true;
             if (pendingSeek > 0) mp.seekTo(pendingSeek);
@@ -340,6 +363,62 @@ public class PlayerService extends Service implements AudioManager.OnAudioFocusC
         if (autoplay) Library.get(this).recordPlay(track.optInt("id"));
         saveQueue();
         publish();
+    }
+
+    // --- Volume egalise ---
+
+    private float normalization(JSONObject track) {
+        if (track == null || !track.has("gain") || track.isNull("gain")) return 0f;
+        if (!Library.get(this).getBool("normalize", true)) return 0f;
+        return (float) track.optDouble("gain", 0);
+    }
+
+    private static float attenuation(float db) {
+        return db < 0 ? (float) Math.pow(10, db / 20.0) : 1f;
+    }
+
+    private static LoudnessEnhancer boost(MediaPlayer mp, float db) {
+        if (db <= 0.05f) return null;
+        try {
+            LoudnessEnhancer e = new LoudnessEnhancer(mp.getAudioSessionId());
+            e.setTargetGain(Math.round(db * 100));  // en millibels
+            e.setEnabled(true);
+            return e;
+        } catch (Exception e) {
+            return null;  // effet indisponible sur ce telephone : volume normal
+        }
+    }
+
+    private Virtualizer spatial(MediaPlayer mp) {
+        if (!Library.get(this).getBool("spatial", false)) return null;
+        try {
+            Virtualizer v = new Virtualizer(0, mp.getAudioSessionId());
+            if (v.getStrengthSupported()) v.setStrength((short) 750);
+            v.setEnabled(true);
+            return v;
+        } catch (Exception e) {
+            return null;  // effet indisponible sur ce telephone
+        }
+    }
+
+    private static void releaseEnhancer(AudioEffect e) {
+        if (e != null) {
+            try { e.release(); } catch (Exception ignored) { }
+        }
+    }
+
+    /** Reglage "Volume egalise" change : on l'applique tout de suite au titre en cours. */
+    void refreshGain() {
+        handler.post(() -> {
+            if (player == null) return;
+            float db = normalization(currentTrack());
+            releaseEnhancer(enhancer);
+            playerVol = attenuation(db);
+            enhancer = boost(player, db);
+            releaseEnhancer(virtualizer);
+            virtualizer = spatial(player);
+            if (!fading) player.setVolume(playerVol, playerVol);
+        });
     }
 
     private void updateSessionMetadata(JSONObject track) {
@@ -409,8 +488,8 @@ public class PlayerService extends Service implements AudioManager.OnAudioFocusC
         }
         if (fading) {
             float f = Math.min(1f, (now - fadeStart) / (float) fadeMs);
-            player.setVolume(1f - f, 1f - f);
-            nextPlayer.setVolume(f, f);
+            player.setVolume((1f - f) * playerVol, (1f - f) * playerVol);
+            nextPlayer.setVolume(f * nextVol, f * nextVol);
             if (f >= 1f) finishCrossfade();
         }
     }
@@ -425,6 +504,10 @@ public class PlayerService extends Service implements AudioManager.OnAudioFocusC
                 .setUsage(AudioAttributes.USAGE_MEDIA)
                 .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build());
         nextPlayer.setWakeMode(this, PowerManager.PARTIAL_WAKE_LOCK);
+        float db = normalization(track);
+        nextVol = attenuation(db);
+        nextEnhancer = boost(nextPlayer, db);
+        nextVirtualizer = spatial(nextPlayer);
         nextPlayer.setOnPreparedListener(mp -> nextPrepared = true);
         nextPlayer.setOnErrorListener((mp, what, extra) -> {
             cancelCrossfade();
@@ -449,7 +532,14 @@ public class PlayerService extends Service implements AudioManager.OnAudioFocusC
         index = nextIndex;
         prepared = true;
         if (old != null) old.release();
-        player.setVolume(1f, 1f);
+        releaseEnhancer(enhancer);
+        enhancer = nextEnhancer;
+        nextEnhancer = null;
+        releaseEnhancer(virtualizer);
+        virtualizer = nextVirtualizer;
+        nextVirtualizer = null;
+        playerVol = nextVol;
+        player.setVolume(playerVol, playerVol);
         player.setOnCompletionListener(mp -> onTrackCompleted());
         player.setOnErrorListener((mp, what, extra) -> {
             prepared = false;
@@ -466,13 +556,17 @@ public class PlayerService extends Service implements AudioManager.OnAudioFocusC
     }
 
     private void cancelCrossfade() {
+        releaseEnhancer(nextEnhancer);
+        nextEnhancer = null;
+        releaseEnhancer(nextVirtualizer);
+        nextVirtualizer = null;
         if (nextPlayer != null) {
             try { nextPlayer.release(); } catch (Exception ignored) { }
         }
         nextPlayer = null;
         nextPrepared = false;
         if (fading && player != null) {
-            try { player.setVolume(1f, 1f); } catch (Exception ignored) { }
+            try { player.setVolume(playerVol, playerVol); } catch (Exception ignored) { }
         }
         fading = false;
     }
@@ -578,10 +672,10 @@ public class PlayerService extends Service implements AudioManager.OnAudioFocusC
                 pause();
                 break;
             case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK:
-                if (player != null) player.setVolume(0.3f, 0.3f);
+                if (player != null) player.setVolume(0.3f * playerVol, 0.3f * playerVol);
                 break;
             case AudioManager.AUDIOFOCUS_GAIN:
-                if (player != null) player.setVolume(1f, 1f);
+                if (player != null) player.setVolume(playerVol, playerVol);
                 if (resumeOnFocusGain) play();
                 resumeOnFocusGain = false;
                 break;

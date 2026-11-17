@@ -537,6 +537,11 @@ VIEWS.phone = () => {
       <h2 class="section-title">Sur le téléphone <span class="muted" style="font:500 14px var(--font-body)">${plural(tracks.length, "titre")}</span>
         ${tracks.length ? `<button class="btn small danger section-action" data-action="phone-unsend-all">${icon("trash")}Retirer toutes les musiques du téléphone</button>` : ""}</h2>
       <p class="hint">Fais un clic droit sur un titre puis « Envoyer sur le téléphone », ou utilise le bouton sur une page d'artiste, d'album ou de playlist. Le téléphone récupère tout à sa prochaine synchro.</p>
+      <div class="panel setting" style="margin-top:12px">
+        <div class="setting-text"><div class="setting-name">Toutes mes playlists, automatiquement</div>
+          <div class="setting-value">Chaque playlist (et les prochaines que tu crées) part sur le téléphone avec ses musiques. Celles que tu retires à la main restent retirées.</div></div>
+        <label class="check"><input type="checkbox" data-phone-all-playlists${ph.all_playlists ? " checked" : ""}>Activé</label>
+      </div>
       ${playlists.length ? `<div class="actions" style="margin:12px 0">${playlists.map((p) => `
         <button class="btn small on" data-action="phone-toggle" data-kind="playlist" data-ids="${p.id}" title="Retirer la playlist du téléphone">${icon("check")}${esc(p.name)}</button>`).join("")}</div>` : ""}
       ${tracks.length ? `<div class="tracklist">${tracks.map((t, i) => rowHTML(t, key, i)).join("")}</div>` : ""}
@@ -1193,6 +1198,24 @@ VIEWS.settings = () => {
         <label class="check"><input type="checkbox" data-setting="organize_by_artist"${c.organize_by_artist ? " checked" : ""}>Activé</label>
       </div>
       <div class="panel setting">
+        <div class="setting-text"><div class="setting-name">Volume égalisé</div>
+          <div class="setting-value">Tous les morceaux sonnent aussi fort : plus de musique qui te fait sursauter après une plus calme. Chaque titre est mesuré une fois, en arrière-plan.</div></div>
+        <label class="check"><input type="checkbox" data-setting="normalize_volume"${c.normalize_volume !== false ? " checked" : ""}>Activé</label>
+      </div>
+      <div class="panel setting">
+        <div class="setting-text"><div class="setting-name">Mode Spatial</div>
+          <div class="setting-value">Élargit le son stéréo pour plus d'espace et d'immersion, surtout au casque.</div></div>
+        <label class="check"><input type="checkbox" data-setting="spatial"${c.spatial ? " checked" : ""}>Activé</label>
+      </div>
+      <div class="panel setting">
+        <div class="setting-text"><div class="setting-name">Fondu enchaîné</div>
+          <div class="setting-value">Le titre suivant démarre en fondu pendant que l'actuel se termine.</div></div>
+        <select class="select" data-setting="crossfade">
+          ${[[0, "Désactivé"], [3, "3 secondes"], [5, "5 secondes"], [8, "8 secondes"], [12, "12 secondes"]].map(([v, l]) =>
+            `<option value="${v}"${Number(c.crossfade || 0) === v ? " selected" : ""}>${l}</option>`).join("")}
+        </select>
+      </div>
+      <div class="panel setting">
         <div class="setting-text"><div class="setting-name">Seulement la musique</div>
           <div class="setting-value">Coupe les blancs et les passages parlés des clips (intro, sketch, générique) à chaque nouveau téléchargement.</div></div>
         <label class="check"><input type="checkbox" data-setting="trim_audio"${c.trim_audio !== false ? " checked" : ""}>Activé</label>
@@ -1387,12 +1410,161 @@ function cycleRepeat() {
   saveSession();
 }
 
+
+// ---------- Moteur audio : volume égalisé, limiteur, fondu enchaîné ----------
+//
+// Le son passe par Web Audio : lecteur -> gain du titre (volume égalisé) -> [mode Spatial] -> limiteur -> sortie.
+// Un 2e lecteur caché ("fader") joue le début du titre suivant pendant le fondu enchaîné ;
+// à la fin du fondu, le lecteur principal reprend ce titre là où le fader en est.
+
+const fader = new Audio();
+fader.preload = "auto";
+let audioGraph = null;  // null = pas encore créé, false = Web Audio indisponible
+let fade = null;  // { index, track } pendant un fondu enchaîné
+
+function ensureAudioGraph() {
+  if (audioGraph !== null) return audioGraph;
+  try {
+    const ctx = new AudioContext();
+    const limiter = ctx.createDynamicsCompressor();  // empêche la saturation quand on monte le son
+    limiter.threshold.value = -1.5;
+    limiter.knee.value = 0;
+    limiter.ratio.value = 20;
+    limiter.attack.value = 0.003;
+    limiter.release.value = 0.15;
+    limiter.connect(ctx.destination);
+    const bus = ctx.createGain();  // les deux lecteurs se rejoignent ici
+    const route = (element) => {
+      const gain = ctx.createGain();
+      ctx.createMediaElementSource(element).connect(gain).connect(bus);
+      return gain;
+    };
+    audioGraph = { ctx, bus, limiter, spatial: createSpatial(ctx, limiter), main: route(media), fader: route(fader) };
+    applySpatial();
+  } catch {
+    audioGraph = false;  // le son passe alors directement, sans égalisation
+  }
+  return audioGraph;
+}
+
+/**
+ * Mode Spatial : élargit l'image stéréo (mid/side). Chaque sortie mélange son canal et
+ * l'opposé en négatif : G' = a·G + b·D, D' = a·D + b·G avec a = (1+w)/2, b = (1-w)/2.
+ * Un son mono (G = D) ressort identique : seule la partie "stéréo" est élargie.
+ */
+function createSpatial(ctx, output) {
+  const width = 1.6;
+  const a = (1 + width) / 2, b = (1 - width) / 2;
+  const input = ctx.createGain();
+  const split = ctx.createChannelSplitter(2);
+  const merge = ctx.createChannelMerger(2);
+  input.connect(split);
+  const wire = (from, to, value) => {
+    const g = ctx.createGain();
+    g.gain.value = value;
+    split.connect(g, from);
+    g.connect(merge, 0, to);
+  };
+  wire(0, 0, a); wire(1, 0, b);  // gauche
+  wire(1, 1, a); wire(0, 1, b);  // droite
+  const trim = ctx.createGain();
+  trim.gain.value = 0.9;  // l'élargissement ajoute un peu d'énergie
+  merge.connect(trim).connect(output);
+  return input;
+}
+
+function applySpatial() {
+  const g = audioGraph;
+  if (!g) return;
+  g.bus.disconnect();
+  g.bus.connect(S.config.spatial ? g.spatial : g.limiter);
+}
+
+/** Facteur de volume (linéaire) du volume égalisé pour un titre. */
+function trackGain(t) {
+  if (!t || S.config.normalize_volume === false || t.gain == null) return 1;
+  return 10 ** (t.gain / 20);
+}
+
+function rampGain(node, value, seconds = 0.08) {
+  const now = audioGraph.ctx.currentTime;
+  node.gain.cancelScheduledValues(now);
+  node.gain.setValueAtTime(node.gain.value, now);
+  node.gain.linearRampToValueAtTime(value, now + seconds);
+}
+
+function applyTrackGain() {
+  const g = ensureAudioGraph();
+  if (!g) return;
+  if (g.ctx.state !== "running") g.ctx.resume().catch(() => {});
+  if (!fade) rampGain(g.main, trackGain(currentTrack()));
+}
+
+const crossfadeSeconds = () => Number(S.config.crossfade) || 0;
+
+function upcomingIndex() {
+  if (S.repeat === "one") return -1;
+  if (S.qi < S.queue.length - 1) return S.qi + 1;
+  return S.repeat === "all" && S.queue.length > 1 ? 0 : -1;
+}
+
+/** Appelé à chaque avancée de la lecture : démarre le fondu quand la fin approche. */
+function crossfadeTick() {
+  const seconds = crossfadeSeconds();
+  if (!seconds || fade || media.paused || seeking) return;
+  const remaining = media.duration - media.currentTime;
+  if (!isFinite(remaining) || remaining > seconds || media.duration < seconds * 3) return;
+  const index = upcomingIndex();
+  const now = currentTrack(), track = index >= 0 ? S.byId.get(S.queue[index]) : null;
+  if (!track || now?.kind === "video" || track.kind === "video") return;
+  const g = ensureAudioGraph();
+  if (!g) return;
+  fade = { index, track };
+  fader.volume = media.volume;
+  fader.muted = media.muted;
+  fader.src = `/media/${track.id}`;
+  g.fader.gain.setValueAtTime(0, g.ctx.currentTime);
+  fader.play().then(() => {
+    if (!fade) return;
+    rampGain(g.fader, trackGain(track), remaining);
+    rampGain(g.main, 0, remaining);
+  }).catch(() => cancelCrossfade());
+}
+
+/** Fin du titre pendant un fondu : le lecteur principal prend le relais du fader. */
+function finishCrossfade() {
+  const { index } = fade;
+  const g = audioGraph;
+  const at = fader.currentTime;
+  fade = null;
+  S.qi = index;
+  loadCurrent(true, at + 0.05);
+  rampGain(g.main, 0, 0.01);
+  media.addEventListener("playing", function handoff() {
+    media.removeEventListener("playing", handoff);
+    rampGain(g.main, trackGain(currentTrack()), 0.06);
+    rampGain(g.fader, 0, 0.06);
+    setTimeout(() => { if (!fade) { fader.pause(); fader.removeAttribute("src"); fader.load(); } }, 120);
+  });
+}
+
+function cancelCrossfade() {
+  if (!fade) return;
+  fade = null;
+  fader.pause();
+  fader.removeAttribute("src");
+  fader.load();
+  if (audioGraph) rampGain(audioGraph.main, trackGain(currentTrack()));
+}
+
 function loadCurrent(autoplay = true, startAt = 0) {
   const t = currentTrack();
   if (!t) return;
+  cancelCrossfade();
   if (autoplay && previewState.id) { previewState.resumeMain = false; stopPreview(); }
   media.src = `/media/${t.id}`;
   pendingSeek = startAt || 0;
+  applyTrackGain();
   if (autoplay) {
     media.play().catch(() => {});
     t.play_count = (t.play_count || 0) + 1;
@@ -1667,9 +1839,15 @@ function bindPlayer() {
     updateTime();
   });
   media.addEventListener("timeupdate", updateTime);
-  media.addEventListener("play", () => { errorStreak = 0; updatePlayState(); });
-  media.addEventListener("pause", () => { updatePlayState(); saveSession(); });
-  media.addEventListener("ended", () => next(true));
+  media.addEventListener("timeupdate", crossfadeTick);
+  media.addEventListener("play", () => { errorStreak = 0; applyTrackGain(); updatePlayState(); });
+  media.addEventListener("pause", () => {
+    if (fade && !media.ended) cancelCrossfade();  // pause pendant un fondu : on l'abandonne
+    updatePlayState();
+    saveSession();
+  });
+  media.addEventListener("seeking", () => { if (fade) cancelCrossfade(); });
+  media.addEventListener("ended", () => (fade ? finishCrossfade() : next(true)));
   media.addEventListener("error", () => {
     if (!media.getAttribute("src")) return;
     errorStreak++;
@@ -1738,6 +1916,7 @@ function setVolumePosition(pos, { save = true } = {}) {
   slider.value = pos;
   setSliderFill(slider, pos / VOLUME_MAX_POS);
   media.volume = gain;
+  fader.volume = gain;
   if (save) media.muted = false;
   $("#volume-label").textContent = formatGain(gain);
   slider.setAttribute("aria-valuetext", formatGain(gain));
@@ -2270,6 +2449,13 @@ document.addEventListener("change", async (e) => {
     if (el.type === "checkbox") renderLinkPanel(el.dataset.form);
     return;
   }
+  if (el.dataset.phoneAllPlaylists != null) {
+    S.phone = await api("phone_all_playlists", el.checked);
+    S.phone.items = S.phone.items || (await api("phone_state")).items;
+    toast(el.checked ? "Toutes tes playlists iront sur le téléphone à la prochaine synchro" : "Les nouvelles playlists ne seront plus envoyées automatiquement");
+    refreshView();
+    return;
+  }
   if (el.dataset.trimId != null && S.trim) {
     const set = trimSelection().get(+el.dataset.trimId);
     if (set) { if (el.checked) set.add(+el.dataset.trimCut); else set.delete(+el.dataset.trimCut); }
@@ -2297,7 +2483,11 @@ document.addEventListener("change", async (e) => {
   }
   if (el.dataset.setting) {
     const value = el.type === "checkbox" ? el.checked : el.value;
-    try { S.config = await api("set_config", el.dataset.setting, value); } catch (err) { toast(errMsg(err), "error"); }
+    try { S.config = await api("set_config", el.dataset.setting, el.dataset.setting === "crossfade" ? Number(value) : value); }
+    catch (err) { toast(errMsg(err), "error"); }
+    if (el.dataset.setting === "normalize_volume") applyTrackGain();
+    if (el.dataset.setting === "spatial") applySpatial();
+    if (el.dataset.setting === "crossfade" && !crossfadeSeconds()) cancelCrossfade();
   }
 });
 

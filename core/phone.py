@@ -139,6 +139,7 @@ class PhoneSync:
         return list(self._config.get("phone_devices") or [])
 
     def state(self):
+        self.sync_all_playlists()
         ip = local_ip()
         pairing = None
         with self._lock:
@@ -153,6 +154,7 @@ class PhoneSync:
             "install_url": f"http://{ip}:{SYNC_PORT}/",
             "apk_available": apk_path() is not None,
             "pairing": pairing,
+            "all_playlists": bool(self._config.get("phone_all_playlists")),
             "devices": [{k: d.get(k) for k in ("id", "name", "paired_at", "last_sync")} for d in self.devices()],
             "items": self._library.phone_items(),
         }
@@ -292,7 +294,34 @@ class PhoneSync:
 
     # --- Donnees ---
 
+    # --- Toutes les playlists automatiquement ---
+
+    def sync_all_playlists(self):
+        """Mode "toutes les playlists" : ajoute a la synchro celles qui n'y sont pas encore
+        (sauf celles retirees a la main)."""
+        if not self._config.get("phone_all_playlists"):
+            return
+        excluded = set(self._config.get("phone_playlists_excluded") or [])
+        sent = set(self._library.phone_items()["playlists"])
+        missing = [p["id"] for p in self._library.list_playlists() if p["id"] not in excluded and p["id"] not in sent]
+        if missing:
+            self._library.phone_add("playlist", missing)
+
+    def set_all_playlists(self, enabled):
+        self._config.set("phone_all_playlists", bool(enabled))
+        if enabled:
+            self._config.set("phone_playlists_excluded", [])
+            self.sync_all_playlists()
+        return self.state()
+
+    def note_playlists(self, ids, sent):
+        """Playlist envoyee ou retiree a la main : le mode automatique respecte ce choix."""
+        excluded = set(self._config.get("phone_playlists_excluded") or [])
+        excluded = excluded - set(ids) if sent else excluded | set(ids)
+        self._config.set("phone_playlists_excluded", sorted(excluded))
+
     def manifest(self):
+        self.sync_all_playlists()
         data = self._library.phone_manifest()
         data["theme"] = self._config.get("theme")
         data["pc_name"] = self.pc_name()
@@ -327,6 +356,7 @@ class PhoneSync:
                     self._library.set_playlist_tracks(pid, tracks)
             elif kind == "remove":
                 self._library.phone_remove("playlist", [pid])
+                self.note_playlists([pid], sent=False)
 
     # --- Recherche et telechargement demandes depuis le telephone ---
 

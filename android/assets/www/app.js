@@ -588,6 +588,12 @@ VIEWS.settings = () => {
     <div class="setting-row"><div><div class="label">Fondu enchaîné</div><div class="desc">Le titre suivant démarre en fondu pendant que l'actuel se termine.</div></div></div>
     <div class="segmented fade-choice">${[[0, "Non"], [3, "3 s"], [5, "5 s"], [8, "8 s"]].map(([v, l]) =>
       `<button class="${fade === v ? "active" : ""}" data-action="set-crossfade" data-value="${v}">${l}</button>`).join("")}</div>
+    <div class="setting-row"><div><div class="label">Volume égalisé</div>
+      <div class="desc">Tous les morceaux sonnent aussi fort (mesurés par Audora sur ton PC).</div></div>
+      <button class="switch${S.lib.normalize !== false ? " on" : ""}" data-action="toggle-normalize" aria-label="Volume égalisé"></button></div>
+    <div class="setting-row"><div><div class="label">Mode Spatial</div>
+      <div class="desc">Élargit le son stéréo, pour plus d'espace au casque.</div></div>
+      <button class="switch${S.lib.spatial ? " on" : ""}" data-action="toggle-spatial" aria-label="Mode Spatial"></button></div>
     <div class="setting-row"><div><div class="label">Lecture sans interruption</div>
       <div class="desc">${S.batteryRestricted ? "Android peut couper la musique écran éteint pour économiser la batterie." : "Audora est autorisé à jouer écran éteint."}</div></div>
       ${S.batteryRestricted ? `<button class="btn" data-action="battery-exempt">Autoriser</button>` : `<span class="tag">${icon("check")}</span>`}</div>
@@ -877,6 +883,18 @@ const ACTIONS = {
   "install-update": () => { const apk = updateAvailable(); if (apk) { A.openUrl(apk.url); toast("Téléchargement de la mise à jour…"); } },
   "battery-exempt": () => A.requestBatteryExemption(),
   "hide-battery-banner": () => { S.batteryBannerHidden = true; refresh(); },
+  "toggle-normalize": () => {
+    S.lib.normalize = S.lib.normalize === false;
+    A.setSetting("normalize", String(S.lib.normalize));
+    refresh();
+    toast(S.lib.normalize ? "Volume égalisé activé" : "Volume égalisé désactivé");
+  },
+  "toggle-spatial": () => {
+    S.lib.spatial = !S.lib.spatial;
+    A.setSetting("spatial", String(S.lib.spatial));
+    refresh();
+    toast(S.lib.spatial ? "Mode Spatial activé" : "Mode Spatial désactivé");
+  },
   "toggle-background-sync": () => {
     S.lib.background_sync = S.lib.background_sync === false;
     A.setSetting("background_sync", String(S.lib.background_sync));

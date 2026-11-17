@@ -153,12 +153,10 @@ def apply_cuts(src, dest, cuts, duration):
                      f"afade=t=in:d={fade},afade=t=out:st={max(0, length - fade):.3f}:d={fade}[p{i}]")
     graph = ";".join(parts) + ";" + "".join(f"[p{i}]" for i in range(len(keep))) + f"concat=n={len(keep)}:v=0:a=1[out]"
 
-    audio = MutagenFile(src)
-    bitrate = max(128, min(320, round((getattr(audio.info, "bitrate", 0) or 192000) / 1000)))
     cmd = [ffmpeg_path(), "-hide_banner", "-loglevel", "error", "-y", "-i", src,
            "-filter_complex", graph, "-map", "[out]", "-map", "0:v?", "-c:v", "copy",
            "-map_metadata", "0", "-id3v2_version", "3",
-           "-c:a", "libmp3lame", "-b:a", f"{bitrate}k", "-f", "mp3", dest]
+           "-c:a", "libmp3lame", "-q:a", "0", "-f", "mp3", dest]  # VBR qualite maximale
     result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace",
                             creationflags=_NO_WINDOW)
     if result.returncode != 0 or not os.path.exists(dest):
