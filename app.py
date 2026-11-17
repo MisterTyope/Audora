@@ -125,6 +125,7 @@ class Api:
             "phone": app.phone.state(),
             "genres": FAMILY_ORDER,
             "engine": engine.status(),
+            "tools": {"ffmpeg": bool(config.FFMPEG), "node": bool(config.NODE)},
             "app": {"version": VERSION, "updates": updater_enabled(),
                     "available": (self._app.updater.available or {}).get("version")},
         }

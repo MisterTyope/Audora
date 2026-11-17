@@ -100,6 +100,7 @@ async function init() {
   S.bridge = state.bridge;
   S.autostart = !!state.autostart;
   S.engine = state.engine;
+  S.tools = state.tools || { ffmpeg: true, node: true };
   S.app = state.app;
   S.genres = state.genres || [];
   S.phone = state.phone || {};

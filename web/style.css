@@ -402,6 +402,9 @@ body.reordering, body.reordering * { cursor: grabbing !important; user-select: n
 .dupe-row.doomed .dupe-main, .dupe-row.doomed .cover { opacity: .5; }
 .dupe-row.doomed .row-title { text-decoration: line-through; }
 .dupe-main { min-width: 0; }
+.tool-state { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; font-size: 13px; color: var(--text-3); white-space: nowrap; }
+.tool-state.ok { color: var(--accent); }
+.tool-state svg.ico { width: 16px; height: 16px; }
 .trim-progress { padding: 18px 20px; max-width: 520px; }
 .trim-group { margin-bottom: 12px; padding: 14px 16px; }
 .trim-head { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 12px; align-items: center; margin-bottom: 6px; }

@@ -32,11 +32,29 @@ RestartApplications=no
 [Languages]
 Name: "fr"; MessagesFile: "compiler:Languages\French.isl"
 
+[Types]
+Name: "complete"; Description: "Complète (recommandée)"
+Name: "light"; Description: "Légère : Audora seul"
+Name: "custom"; Description: "Personnalisée"; Flags: iscustom
+
+[Components]
+Name: "main"; Description: "Audora"; Types: complete light custom; Flags: fixed
+Name: "ffmpeg"; Description: "ffmpeg : conversion en MP3, découpe des blancs, volume égalisé, vidéos HD"; Types: complete
+Name: "node"; Description: "Node.js : résout les « défis » de YouTube"; Types: complete
+
+[Messages]
+SelectComponentsLabel2=Choisis ce qu'il faut installer.%n%nffmpeg est le « couteau suisse » du son. Sans lui, Audora télécharge l'audio de YouTube tel quel (en M4A, que le PC et le téléphone savent lire), mais tu perds le MP3, la découpe des blancs et des paroles, le volume égalisé et les vidéos en bonne qualité.%n%nNode.js sert uniquement à résoudre les « défis » que YouTube impose pour donner ses formats. Sans lui, Audora marche encore, mais avec des formats en moins et davantage de blocages, et ça empire à mesure que YouTube se durcit.%n%nSi ffmpeg ou Node.js sont déjà installés sur ce PC, Audora utilise ceux-là.
+
 [Tasks]
 Name: "desktopicon"; Description: "Créer un raccourci sur le Bureau"; GroupDescription: "Raccourcis :"
 
 [Files]
-Source: "..\dist\Audora\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\dist\Audora\*"; DestDir: "{app}"; Excludes: "\_internal\bin\*"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: main
+Source: "..\dist\Audora\_internal\bin\ffmpeg.exe"; DestDir: "{app}\_internal\bin"; Flags: ignoreversion; Components: ffmpeg
+Source: "..\dist\Audora\_internal\bin\ffprobe.exe"; DestDir: "{app}\_internal\bin"; Flags: ignoreversion; Components: ffmpeg
+Source: "..\dist\Audora\_internal\bin\LICENCE-ffmpeg.txt"; DestDir: "{app}\_internal\bin"; Flags: ignoreversion; Components: ffmpeg
+Source: "..\dist\Audora\_internal\bin\node.exe"; DestDir: "{app}\_internal\bin"; Flags: ignoreversion; Components: node
+Source: "..\dist\Audora\_internal\bin\LICENCE-node.txt"; DestDir: "{app}\_internal\bin"; Flags: ignoreversion; Components: node
 
 [InstallDelete]
 ; Les anciens fichiers de l'application sont remplaces en entier (jamais les donnees).

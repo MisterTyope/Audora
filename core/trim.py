@@ -200,6 +200,8 @@ class LibraryTrimmer:
             self._emit("trim", self.snapshot())
 
     def scan(self):
+        if not ffmpeg_path():
+            raise ValueError("Cette analyse demande ffmpeg, qui n'est pas installé : relance l'installateur d'Audora et coche ffmpeg.")
         with self._lock:
             if self.state["phase"] in ("scanning", "applying"):
                 return self.snapshot()

@@ -16,6 +16,7 @@ import uuid
 from yt_dlp import YoutubeDL
 from yt_dlp.utils import DownloadCancelled, download_range_func
 
+from . import config
 from .config import YTDLP_BASE_OPTS
 from . import trim
 from .covers import make_cover
@@ -118,6 +119,9 @@ class DownloadManager:
             playlist = True
         if start is not None and end is not None and float(end) <= float(start):
             raise ValueError("La fin de l'extrait doit être après le début.")
+        if (start is not None or end is not None) and not config.FFMPEG:
+            raise ValueError("Garder seulement un passage demande ffmpeg, qui n'est pas installé "
+                             "(relance l'installateur d'Audora et coche ffmpeg).")
 
         job_id = uuid.uuid4().hex[:10]
         job = {
@@ -348,13 +352,19 @@ class DownloadManager:
             opts["ignoreerrors"] = True  # une video privee ne doit pas bloquer le reste
             # On espace les titres d'une playlist, sinon YouTube bloque au bout de quelques-uns.
             opts.update(sleep_interval=PACING[0], max_sleep_interval=PACING[1], sleep_interval_requests=0.75)
-        if job["format"] == "mp3":
+        if job["format"] == "mp3" and not config.FFMPEG:
+            # Sans ffmpeg : la piste audio de YouTube telle quelle, en M4A (le PC et le telephone la lisent).
+            opts["format"] = "bestaudio[ext=m4a]/bestaudio[acodec^=mp4a]/bestaudio"
+        elif job["format"] == "mp3":
             # Meilleure piste audio de YouTube (Opus ~160 kbps en general), sans passer par la video.
             opts["format"] = "bestaudio[acodec=opus]/bestaudio/best"
             opts["postprocessors"] = [
                 # "0" = MP3 VBR qualite maximale (~245 kbps) : la conversion ne perd plus rien d'audible.
                 {"key": "FFmpegExtractAudio", "preferredcodec": "mp3", "preferredquality": "0"},
             ]
+        elif not config.FFMPEG:
+            # Sans ffmpeg, impossible d'assembler image et son : video deja assemblee (qualite limitee).
+            opts["format"] = "best[ext=mp4][acodec!=none][vcodec!=none]/best[acodec!=none][vcodec!=none]"
         else:
             opts["format"] = _video_format(job["quality"])
             opts["merge_output_format"] = "mp4"
@@ -396,6 +406,8 @@ class DownloadManager:
                 detail = "Ajouté à ta bibliothèque"
             if job.get("trimmed"):
                 detail += f", {job['trimmed']} s de blancs ou paroles coupés"
+            if not config.FFMPEG:
+                detail += " (en M4A : ffmpeg n'est pas installé)" if job["format"] == "mp3" else " (qualité limitée : ffmpeg n'est pas installé)"
             job.update(status="done", progress=1.0, detail=detail)
             self._publish(job, force=True)
             self._emit("library_changed", None)

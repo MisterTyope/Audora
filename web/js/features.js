@@ -81,6 +81,29 @@ MOUNTS.settings = async () => {
   if (box) box.innerHTML = backupSettingHTML();
 };
 
+// ---------- Composants facultatifs (ffmpeg, Node.js) ----------
+
+const TOOL_INFO = {
+  ffmpeg: ["ffmpeg", "Le « couteau suisse » du son : conversion en MP3, vidéos en bonne qualité, découpe des blancs et volume égalisé.",
+    "Sans lui, Audora télécharge l'audio de YouTube tel quel, en M4A (le PC et le téléphone savent le lire), mais pas de MP3, pas de découpe, pas de volume égalisé, et des vidéos de qualité limitée."],
+  node: ["Node.js", "Résout les « défis » que YouTube impose pour donner ses formats.",
+    "Sans lui, Audora marche encore, mais avec des formats en moins et davantage de blocages, et ça empire à mesure que YouTube se durcit."],
+};
+
+function toolsSettingHTML() {
+  const tools = S.tools || {};
+  return Object.entries(TOOL_INFO).map(([key, [name, role, without]]) => `
+    <div class="panel setting">
+      <div class="setting-text"><div class="setting-name">${name}</div>
+        <div class="setting-value">${role}${tools[key] ? "" : `<br><strong>Non installé.</strong> ${without}
+          Pour l'ajouter : relance l'installateur d'Audora et coche ${name}.`}</div></div>
+      <span class="tool-state${tools[key] ? " ok" : ""}">${tools[key] ? `${icon("check")}Installé` : "Absent"}</span>
+    </div>`).join("");
+}
+
+const noFfmpegNote = (what) => S.tools && !S.tools.ffmpeg
+  ? `<p class="dl-detail error">${what} demande ffmpeg, qui n'est pas installé : relance l'installateur d'Audora et coche ffmpeg.</p>` : "";
+
 // ---------- Version d'Audora et mises à jour ----------
 
 function appSettingHTML() {
@@ -132,6 +155,7 @@ VIEWS.trim = () => `
   <div class="page-head"><div><h1 class="page-title">Seulement la musique</h1>
     <div class="page-sub">Repère dans tes MP3 les passages parlés des clips (intro, sketch, générique) et les blancs, pour ne garder que la musique.
       Tu choisis ce qui est coupé ; les fichiers d'origine partent dans la Corbeille de Windows.</div></div></div>
+  ${noFfmpegNote("Couper les blancs et les passages parlés")}
   <div id="trim"></div>`;
 
 MOUNTS.trim = async () => {

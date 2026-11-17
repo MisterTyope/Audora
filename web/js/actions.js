@@ -196,7 +196,7 @@ const ACTIONS = {
     api("restart_app");
   },
   "trim-scan": async () => {
-    S.trim = { state: await api("trim_scan"), sel: null };
+    try { S.trim = { state: await api("trim_scan"), sel: null }; } catch (e) { toast(errMsg(e), "error"); return; }
     renderTrim();
   },
   "trim-apply": async () => {

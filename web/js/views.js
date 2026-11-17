@@ -309,7 +309,7 @@ function ytRowHTML(r) {
     actions = `<span class="tag">${icon("check")}Dans ta bibliothèque</span>
       <button class="btn small" data-action="play-track" data-track="${owned.id}">${icon("play")}Écouter</button>`;
   } else {
-    actions = `<button class="btn small primary" data-action="yt-download" data-id="${esc(r.id)}" data-format="mp3">${icon("download")}MP3</button>
+    actions = `<button class="btn small primary" data-action="yt-download" data-id="${esc(r.id)}" data-format="mp3">${icon("download")}${S.tools && !S.tools.ffmpeg ? "M4A" : "MP3"}</button>
       <button class="btn small" data-action="yt-download" data-id="${esc(r.id)}" data-format="mp4">MP4</button>`;
   }
   const year = S.search.details?.[r.id]?.year;
@@ -472,7 +472,7 @@ function renderLinkPanel(prefix) {
     <div class="panel">
       ${head}
       <div class="form-grid">
-        <div class="segmented" role="group" aria-label="Format">${seg("mp3", "Audio MP3")}${seg("mp4", "Vidéo MP4")}</div>
+        <div class="segmented" role="group" aria-label="Format">${seg("mp3", S.tools && !S.tools.ffmpeg ? "Audio M4A" : "Audio MP3")}${seg("mp4", "Vidéo MP4")}</div>
         ${form.format === "mp4" ? `<select class="select" data-form="${prefix}" data-field="quality" aria-label="Qualité vidéo">
             ${qualities.map(([v, l]) => `<option value="${v}"${form.quality === v ? " selected" : ""}>${l}</option>`).join("")}
           </select>` : ""}
@@ -575,7 +575,7 @@ function dlItemHTML(j) {
     <div class="dl-item">
       <div class="cover">${j.thumb ? `<img src="${esc(j.thumb)}" alt="">` : ""}</div>
       <div style="min-width:0">
-        <div class="dl-title"><span class="fmt">${j.format === "mp4" ? "MP4" : "MP3"}</span>${esc(j.title)}</div>
+        <div class="dl-title"><span class="fmt">${j.format === "mp4" ? "MP4" : S.tools && !S.tools.ffmpeg ? "M4A" : "MP3"}</span>${esc(j.title)}</div>
         <div class="dl-detail${detailClass}">${esc(detail)}</div>
         ${active ? `<div class="bar"><span style="width:${Math.round((j.progress || 0) * 100)}%"></span></div>` : ""}
       </div>
@@ -684,6 +684,7 @@ VIEWS.settings = () => {
         </select>
       </div>
       <div class="panel setting" id="app-setting">${appSettingHTML()}</div>
+      ${toolsSettingHTML()}
       <div class="panel setting" id="engine-setting">${engineSettingHTML()}</div>
       <div class="panel setting" id="backup-setting">${backupSettingHTML()}</div>
       <div class="panel setting">
