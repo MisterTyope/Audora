@@ -1,0 +1,8 @@
+yt-dlp[default]
+pywebview
+mutagen
+pystray
+pillow
+pywin32
+qrcode
+cryptography

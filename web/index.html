@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Audora</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="titlebar" id="titlebar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <span class="brand-name">Audora</span>
+    </div>
+    <form class="searchbar" id="searchbar" autocomplete="off">
+      <i data-icon="search"></i>
+      <input id="search-input" type="search" placeholder="Rechercher sur YouTube ou coller un lien" aria-label="Rechercher">
+      <button type="button" class="paste-btn" data-action="paste-search" title="Coller le lien copié">Coller</button>
+    </form>
+    <div class="titlebar-spacer"></div>
+    <div class="win-controls">
+      <button class="win-btn" data-action="win-min" title="Réduire" aria-label="Réduire"><i data-icon="win-min"></i></button>
+      <button class="win-btn" id="win-max" data-action="win-max" title="Agrandir" aria-label="Agrandir"><i data-icon="win-max"></i></button>
+      <button class="win-btn close" data-action="win-close" title="Fermer (Audora reste dans la barre des tâches)" aria-label="Fermer"><i data-icon="close"></i></button>
+    </div>
+  </header>
+
+  <div class="ambient" aria-hidden="true"></div>
+  <div class="app">
+    <aside class="sidebar" aria-label="Navigation">
+
+      <nav class="nav" id="nav">
+        <button class="nav-item" data-action="nav" data-view="home"><i data-icon="home"></i>Accueil</button>
+        <button class="nav-item" data-action="nav" data-view="search"><i data-icon="search"></i>Rechercher</button>
+        <div class="nav-group">Ma bibliothèque</div>
+        <button class="nav-item" data-action="nav" data-view="songs"><i data-icon="note"></i>Titres</button>
+        <button class="nav-item" data-action="nav" data-view="artists"><i data-icon="mic"></i>Artistes</button>
+        <button class="nav-item" data-action="nav" data-view="albums"><i data-icon="disc"></i>Albums</button>
+        <button class="nav-item" data-action="nav" data-view="videos"><i data-icon="film"></i>Vidéos</button>
+        <button class="nav-item" data-action="nav" data-view="phone"><i data-icon="phone"></i>Téléphone</button>
+        <button class="nav-item" data-action="nav" data-view="downloads"><i data-icon="download"></i>Téléchargements<span class="badge" id="dl-badge" hidden></span></button>
+      </nav>
+
+      <div class="playlists-head">
+        <span>Playlists</span>
+        <button class="icon-btn small" data-action="new-playlist" title="Nouvelle playlist" aria-label="Nouvelle playlist"><i data-icon="plus"></i></button>
+      </div>
+      <div class="playlist-nav" id="playlist-nav"></div>
+
+      <button class="nav-item settings-link" data-action="nav" data-view="settings"><i data-icon="settings"></i>Réglages</button>
+    </aside>
+
+    <main class="main" id="main">
+      <div class="view" id="view"></div>
+    </main>
+
+    <aside class="queue" id="queue" aria-label="File d'attente" hidden>
+      <div class="queue-head">
+        <h2>File d'attente</h2>
+        <button class="icon-btn" data-action="toggle-queue" aria-label="Fermer"><i data-icon="close"></i></button>
+      </div>
+      <div class="queue-list" id="queue-list"></div>
+    </aside>
+  </div>
+
+  <section class="nowplaying" id="nowplaying" aria-label="Lecture en cours" hidden>
+    <div class="np-backdrop" id="np-backdrop"></div>
+    <button class="icon-btn np-close" data-action="toggle-nowplaying" aria-label="Réduire"><i data-icon="chevron-down"></i></button>
+    <div class="np-stage" id="np-stage">
+      <video id="media" preload="auto" playsinline></video>
+      <div class="np-cover" id="np-cover"></div>
+    </div>
+    <div class="np-meta">
+      <div class="np-title" id="np-title"></div>
+      <div class="np-artist" id="np-artist"></div>
+    </div>
+  </section>
+
+  <footer class="player" id="player">
+    <div class="player-track">
+      <button class="player-cover" id="player-cover" data-action="toggle-nowplaying" aria-label="Afficher la lecture en cours"></button>
+      <div class="player-text">
+        <div class="player-title" id="player-title">Rien en lecture</div>
+        <div class="player-sub">
+          <button class="player-artist link" id="player-artist" data-action="goto-current-artist"></button>
+          <button class="genre-chip" id="player-genre" data-action="genre-current" title="Changer le genre de ce titre" hidden></button>
+        </div>
+      </div>
+      <button class="icon-btn player-more" id="player-more" data-action="current-menu" title="Plus d'options" aria-label="Plus d'options" hidden><i data-icon="more"></i></button>
+    </div>
+
+    <div class="player-center">
+      <div class="controls">
+        <button class="icon-btn" id="btn-shuffle" data-action="shuffle" title="Aléatoire" aria-label="Aléatoire"><i data-icon="shuffle"></i></button>
+        <button class="icon-btn" data-action="prev" title="Précédent" aria-label="Précédent"><i data-icon="prev"></i></button>
+        <button class="play-btn" id="btn-play" data-action="toggle-play" aria-label="Lecture"><i data-icon="play"></i></button>
+        <button class="icon-btn" data-action="next" title="Suivant" aria-label="Suivant"><i data-icon="next"></i></button>
+        <button class="icon-btn" id="btn-repeat" data-action="repeat" title="Répéter" aria-label="Répéter"><i data-icon="repeat"></i></button>
+      </div>
+      <div class="timeline">
+        <span class="time" id="time-current">0:00</span>
+        <input type="range" class="slider" id="seek" min="0" max="1000" value="0" step="1" aria-label="Position">
+        <span class="time" id="time-total">0:00</span>
+      </div>
+    </div>
+
+    <div class="player-side">
+      <button class="icon-btn" id="btn-mute" data-action="mute" aria-label="Couper le son"><i data-icon="volume"></i></button>
+      <div class="vol-wrap" id="vol-wrap">
+        <span class="vol-label" id="volume-label">80 %</span>
+        <input type="range" class="slider volume" id="volume" min="0" max="1000" value="928" step="1" aria-label="Volume">
+      </div>
+      <button class="icon-btn" id="btn-queue" data-action="toggle-queue" title="File d'attente" aria-label="File d'attente"><i data-icon="queue"></i></button>
+      <button class="icon-btn" data-action="toggle-nowplaying" title="Plein écran" aria-label="Plein écran"><i data-icon="expand"></i></button>
+    </div>
+  </footer>
+
+  <div class="menu" id="menu" role="menu" hidden></div>
+  <div id="modal-root"></div>
+  <div class="toasts" id="toasts" aria-live="polite"></div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

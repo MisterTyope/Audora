@@ -1,0 +1,14 @@
+# Fichiers generes
+__pycache__/
+*.pyc
+build/
+dist/
+dist_maj/
+*.spec
+android/build/
+
+# Secrets : sauvegardes a part (voir Documents\Audora-sauvegarde), jamais dans l'historique
+*.keystore
+
+# Note personnelle
+claude.txt

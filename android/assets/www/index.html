@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>Audora</title>
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <main class="view" id="view"></main>
+
+  <div class="mini" id="mini" hidden>
+    <button class="mini-open" data-action="open-player" aria-label="Afficher le lecteur">
+      <span class="mini-cover" id="mini-cover"></span>
+      <span class="mini-text"><span class="mini-title" id="mini-title"></span><span class="mini-artist" id="mini-artist"></span></span>
+    </button>
+    <button class="icon-btn" id="mini-play" data-action="toggle" aria-label="Lecture"></button>
+    <button class="icon-btn" data-action="next" aria-label="Suivant"><i data-icon="next"></i></button>
+    <div class="mini-progress"><span id="mini-progress"></span></div>
+  </div>
+
+  <nav class="tabs" id="tabs">
+    <button data-action="tab" data-view="home"><i data-icon="home"></i><span>Accueil</span></button>
+    <button data-action="tab" data-view="search"><i data-icon="search"></i><span>Rechercher</span></button>
+    <button data-action="tab" data-view="library"><i data-icon="library"></i><span>Bibliothèque</span></button>
+    <button data-action="tab" data-view="settings"><i data-icon="settings"></i><span>Réglages</span></button>
+  </nav>
+
+  <section class="player" id="player" hidden>
+    <div class="player-bg" id="player-bg"></div>
+    <div class="player-top">
+      <button class="icon-btn" data-action="close-player" aria-label="Réduire"><i data-icon="down"></i></button>
+      <span class="player-label">Lecture en cours<span class="sleep-status" id="sleep-status"></span></span>
+      <span>
+        <button class="icon-btn" id="btn-sleep" data-action="sleep" aria-label="Minuterie de sommeil"><i data-icon="moon"></i></button>
+        <button class="icon-btn" data-action="toggle-queue" aria-label="File d'attente"><i data-icon="queue"></i></button>
+      </span>
+    </div>
+    <div class="player-body" id="player-body">
+      <div class="player-cover" id="player-cover"></div>
+      <div class="player-meta">
+        <div class="player-title" id="player-title"></div>
+        <div class="player-artist" id="player-artist"></div>
+      </div>
+      <input type="range" class="seek" id="seek" min="0" max="1000" value="0" aria-label="Position">
+      <div class="times"><span id="t-cur">0:00</span><span id="t-total">0:00</span></div>
+      <div class="controls">
+        <button class="icon-btn" id="btn-shuffle" data-action="shuffle" aria-label="Aléatoire"><i data-icon="shuffle"></i></button>
+        <button class="icon-btn big" data-action="prev" aria-label="Précédent"><i data-icon="prev"></i></button>
+        <button class="play-btn" id="btn-play" data-action="toggle" aria-label="Lecture"></button>
+        <button class="icon-btn big" data-action="next" aria-label="Suivant"><i data-icon="next"></i></button>
+        <button class="icon-btn" id="btn-repeat" data-action="repeat" aria-label="Répéter"><i data-icon="repeat"></i></button>
+      </div>
+    </div>
+    <div class="queue" id="queue" hidden></div>
+  </section>
+
+  <div id="sheet-root"></div>
+  <div class="toasts" id="toasts"></div>
+  <audio id="preview" preload="none"></audio>
+  <script src="app.js"></script>
+</body>
+</html>
