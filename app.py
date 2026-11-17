@@ -65,6 +65,8 @@ from core.lyrics import LyricsFinder, lyrics_for
 from core import startup
 from core.genres import FAMILY_ORDER, CoverFinder, GenreFinder
 from core.trim import LibraryTrimmer
+from core.updater import Updater, enabled as updater_enabled
+from core.version import VERSION
 from core.phone import PhoneSync
 from core.server import start_server
 from core.taskbar import THUMB_ACTIONS, Taskbar
@@ -123,6 +125,8 @@ class Api:
             "phone": app.phone.state(),
             "genres": FAMILY_ORDER,
             "engine": engine.status(),
+            "app": {"version": VERSION, "updates": updater_enabled(),
+                    "available": (self._app.updater.available or {}).get("version")},
         }
 
     # --- Moteur YouTube ---
@@ -155,6 +159,16 @@ class Api:
 
     def log_js_error(self, message):
         journal.log.error("Interface : %s", str(message)[:2000])
+
+    def check_app_update(self):
+        self._app.updater.check_in_background(force=True)
+
+    def install_app_update(self):
+        try:
+            return self._app.updater.install(self._app.quit)
+        except Exception as exc:
+            journal.log.exception("Mise a jour d'Audora impossible")
+            raise ValueError(str(exc) or "Mise à jour impossible")
 
     def engine_status(self):
         return engine.status()
@@ -386,6 +400,7 @@ class App:
         self.loudness = LoudnessAnalyzer(self.library, lambda: self.emit("library_changed"))
         self.lyrics = LyricsFinder(self.library, lambda: None)
         self.trimmer = LibraryTrimmer(self.library, self.emit, _move_to_recycle_bin)
+        self.updater = Updater(lambda info: self.emit("app_update", {"version": info["version"], "notes": info["notes"]}))
 
     # --- Communication avec l'interface ---
 
@@ -543,6 +558,7 @@ class App:
         self.lyrics.start()
         engine.check_for_update(self.on_engine_update)
         journal.start_daily_backups(config.DB_PATH)
+        self.updater.check_in_background()
 
     def on_engine_update(self):
         self.emit("engine", engine.status())

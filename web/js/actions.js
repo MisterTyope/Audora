@@ -137,6 +137,19 @@ const ACTIONS = {
   "dl-clear": async () => { S.downloads = await api("clear_downloads"); renderDlList(); updateBadge(); },
 
   "open-library": () => api("open_library_folder"),
+  "check-app-update": async () => {
+    await api("check_app_update");
+    toast("Recherche d'une nouvelle version…");
+  },
+  "install-app-update": async (el) => {
+    const active = S.downloads.filter((j) => ACTIVE_STATUSES.includes(j.status)).length;
+    if (active && !await confirmModal("Installer la nouvelle version ?",
+      `${plural(active, "téléchargement")} en cours reprendra après la mise à jour.`, "Installer")) return;
+    el.disabled = true;
+    el.textContent = "Téléchargement…";
+    saveSession();
+    try { await api("install_app_update"); } catch (e) { toast(errMsg(e), "error"); el.disabled = false; el.textContent = "Installer"; }
+  },
   "backup-now": async () => {
     S.backups = await api("backup_now");
     const box = $("#backup-setting");

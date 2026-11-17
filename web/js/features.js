@@ -81,6 +81,24 @@ MOUNTS.settings = async () => {
   if (box) box.innerHTML = backupSettingHTML();
 };
 
+// ---------- Version d'Audora et mises à jour ----------
+
+function appSettingHTML() {
+  const a = S.app || {};
+  return `<div class="setting-text"><div class="setting-name">Audora ${esc(a.version || "")}</div>
+      <div class="setting-value">${a.available ? `<strong>La version ${esc(a.available)} est disponible.</strong> Audora se fermera le temps de l'installer, puis se relancera.`
+        : a.updates ? "Audora vérifie chaque jour s'il existe une nouvelle version." : "Mises à jour automatiques non activées pour cette copie d'Audora."}</div></div>
+    ${a.available ? `<button class="btn small primary" data-action="install-app-update">Installer</button>`
+      : a.updates ? `<button class="btn small" data-action="check-app-update">Vérifier</button>` : ""}`;
+}
+
+function onAppUpdate(info) {
+  S.app = { ...(S.app || {}), available: info.version };
+  const box = $("#app-setting");
+  if (box) box.innerHTML = appSettingHTML();
+  toast(`Audora ${info.version} est disponible : installe-la depuis les Réglages`);
+}
+
 // ---------- Moteur YouTube (yt-dlp) ----------
 
 function engineSettingHTML() {

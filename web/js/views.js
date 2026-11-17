@@ -683,6 +683,7 @@ VIEWS.settings = () => {
           ${qualities.map(([v, l]) => `<option value="${v}"${c.quality === v ? " selected" : ""}>${l}</option>`).join("")}
         </select>
       </div>
+      <div class="panel setting" id="app-setting">${appSettingHTML()}</div>
       <div class="panel setting" id="engine-setting">${engineSettingHTML()}</div>
       <div class="panel setting" id="backup-setting">${backupSettingHTML()}</div>
       <div class="panel setting">

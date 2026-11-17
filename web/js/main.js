@@ -15,6 +15,7 @@ window.onBackendEvent = (name, payload) => {
     case "library_changed": reloadLibrary(); break;
     case "trim": onTrimEvent(payload); break;
     case "engine": onEngineEvent(payload); break;
+    case "app_update": onAppUpdate(payload); break;
     case "phone_changed": refreshPhone(); break;
     case "toast": toast(payload?.message || ""); break;
     case "player_action": runPlayerAction(payload || {}); break;
@@ -99,6 +100,7 @@ async function init() {
   S.bridge = state.bridge;
   S.autostart = !!state.autostart;
   S.engine = state.engine;
+  S.app = state.app;
   S.genres = state.genres || [];
   S.phone = state.phone || {};
   setVolumePosition(gainToPosition(typeof S.config.volume === "number" ? S.config.volume : 0.8), { save: false });
