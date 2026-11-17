@@ -333,6 +333,16 @@ public class SyncManager {
         }
     }
 
+    /** Passage d'une musique decoupe par le PC (ffmpeg, avec fondus), pour une sonnerie. */
+    public static void downloadRingtone(Context context, int trackId, long startMs, long endMs, File dest) throws Exception {
+        JSONObject pc = Library.get(context).pc();
+        if (pc == null) throw new Exception("Pas de PC associé");
+        int port = pc.optInt("port", DEFAULT_PORT);
+        String host = reachableHost != null ? reachableHost : pc.optString("host");
+        prepare(pc);
+        download(host, port, "/sync/ringtone/" + trackId + "?start=" + startMs + "&end=" + endMs, pc.getString("token"), dest);
+    }
+
     private static final ReentrantLock SYNC_LOCK = new ReentrantLock();
 
     public static void sync(Context context, Listener listener) throws Exception {

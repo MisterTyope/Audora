@@ -762,6 +762,44 @@ document.addEventListener("reorder", (e) => {
   }
 });
 
+// ---------- Sonnerie, notification ou alarme a partir d'un passage ----------
+
+const RT = { start: 0, length: 20, type: "ringtone", busy: false, result: null };
+
+VIEWS.ringtone = (id) => {
+  const t = S.byId.get(id);
+  if (!t) return backButton() + `<p class="hint">Titre introuvable.</p>`;
+  const dur = Math.floor(t.duration || 0);
+  RT.start = Math.min(RT.start, Math.max(0, dur - 5));
+  const lengths = RT.type === "notification" ? [3, 5, 8, 12] : [10, 20, 30, 40];
+  if (!lengths.includes(RT.length)) RT.length = lengths[1];
+  const r = RT.result;
+  return backButton() + `<h1 class="title">Créer une sonnerie</h1><p class="sub">${esc(t.title)} · ${esc(t.artist)}</p>
+    <section class="settings-section"><h2>Usage</h2><div class="segmented" style="grid-template-columns:repeat(3,1fr)">
+      ${[["ringtone", "Sonnerie"], ["notification", "Notification"], ["alarm", "Alarme"]].map(([v, l]) =>
+        `<button class="${RT.type === v ? "active" : ""}" data-action="rt-type" data-value="${v}">${l}</button>`).join("")}</div></section>
+    <section class="settings-section"><h2>Début du passage : ${fmtTime(RT.start)}</h2>
+      <input type="range" class="seek" id="rt-start" min="0" max="${Math.max(0, dur - 3)}" value="${RT.start}" style="width:100%">
+      <h2 style="margin-top:16px">Durée</h2><div class="segmented" style="grid-template-columns:repeat(4,1fr)">
+      ${lengths.map((v) => `<button class="${RT.length === v ? "active" : ""}" data-action="rt-length" data-value="${v}">${v} s</button>`).join("")}</div>
+      <p class="hint">De ${fmtTime(RT.start)} à ${fmtTime(Math.min(dur, RT.start + RT.length))}</p></section>
+    <button class="btn block" data-action="rt-listen" style="margin-bottom:10px">${icon("play")}Écouter le passage</button>
+    <button class="btn primary block" data-action="rt-create" ${RT.busy ? "disabled" : ""}>${RT.busy ? "Création…" : "Créer et appliquer"}</button>
+    ${r ? (r.ok ? `<div class="banner" style="margin-top:14px"><div>${r.type === "alarm"
+        ? "Ajouté aux sons d'alarme. Dans ton appli Horloge, choisis « Audora - " + esc(t.title) + " » comme son de l'alarme voulue."
+        : r.applied ? `C'est ta nouvelle ${r.type === "notification" ? "son de notification" : "sonnerie"} !`
+          : "Son enregistré. Autorise Audora à modifier les paramètres système, puis touche « Appliquer »."}
+        ${r.fades ? "" : `<div class="hint">Découpé sur le téléphone (sans fondu) : avec le PC allumé, le passage a un fondu.</div>`}</div>
+        ${r.applied || r.type === "alarm" ? "" : `<button class="btn" data-action="rt-permission">Autoriser</button><button class="btn primary" data-action="rt-apply">Appliquer</button>`}</div>`
+      : `<p class="hint" style="color:#ff7a85;margin-top:12px">${esc(r.message || "Création impossible.")}</p>`) : ""}`;
+};
+
+MOUNTS.ringtone = () => {
+  const el = $("#rt-start");
+  if (el) el.addEventListener("input", () => { RT.start = +el.value; el.closest("section").querySelector("h2").textContent = `Début du passage : ${fmtTime(RT.start)}`; });
+  if (el) el.addEventListener("change", () => { const y = $("#view").scrollTop; render(); $("#view").scrollTop = y; });
+};
+
 // ---------- Paroles (recues du PC a la synchro, disponibles hors ligne) ----------
 
 const lyricsState = { id: null, lines: [], active: -1 };
@@ -858,6 +896,7 @@ function trackMenu(id, playlistId = null, pindex = null) {
     <button class="item" data-action="play-next" data-track="${id}">${icon("play-next")}Lire ensuite</button>
     <button class="item" data-action="add-queue" data-track="${id}">${icon("list-plus")}Ajouter à la file d'attente</button>
     <button class="item" data-action="radio" data-track="${id}">${icon("radio")}Lancer une radio</button>
+    <button class="item" data-action="open-ringtone" data-track="${id}">${icon("moon")}Créer une sonnerie…</button>
     <button class="item" data-action="pick-playlist" data-track="${id}">${icon("plus")}Ajouter à une playlist…</button>
     ${playlistId != null ? `<button class="item" data-action="playlist-remove-track" data-id="${playlistId}" data-pindex="${pindex}">${icon("close")}Retirer de cette playlist</button>` : ""}
     <button class="item" data-action="goto-artist" data-artist="${esc(t.artist)}">${icon("user")}Aller à l'artiste</button>
@@ -931,6 +970,22 @@ const ACTIONS = {
   repeat: () => A.command("repeat", 0),
   jump: (el) => A.command("jump", +el.dataset.index),
   "open-player": () => { $("#player").hidden = false; $("#queue").hidden = true; $("#lyrics").hidden = true; $("#player-body").hidden = false; },
+  "open-ringtone": (el) => { closeSheet(); RT.result = null; RT.start = 0; go("ringtone", +el.dataset.track, true); },
+  "rt-type": (el) => { RT.type = el.dataset.value; RT.result = null; refresh(); },
+  "rt-length": (el) => { RT.length = +el.dataset.value; refresh(); },
+  "rt-listen": () => A.previewSnippet(S.view.param, RT.start * 1000, RT.length * 1000),
+  "rt-create": () => {
+    A.stopSnippet();
+    RT.busy = true;
+    RT.result = null;
+    refresh();
+    A.createRingtone(S.view.param, RT.start * 1000, (RT.start + RT.length) * 1000, RT.type);
+  },
+  "rt-permission": () => A.openWriteSettings(),
+  "rt-apply": () => {
+    if (A.applyLastRingtone()) { RT.result = { ...RT.result, applied: true }; refresh(); toast("Appliqué"); }
+    else toast("Autorise d'abord Audora à modifier les paramètres système", "error");
+  },
   "toggle-lyrics": () => {
     const l = $("#lyrics");
     l.hidden = !l.hidden;
@@ -1187,6 +1242,11 @@ window.onNative = (name, data) => {
       refresh();
       break;
     }
+    case "ringtone":
+      RT.busy = false;
+      RT.result = data;
+      if (S.view.name === "ringtone") refresh();
+      break;
     case "storage":
       S.storage = data;
       if (S.view.name === "settings") {  // sans relancer MOUNTS (qui redemanderait le calcul)

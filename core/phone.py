@@ -24,6 +24,7 @@ import re
 import secrets
 import socket
 import ssl
+import subprocess
 import sys
 import threading
 import time
@@ -476,6 +477,31 @@ class _SyncHandler(http.server.BaseHTTPRequestHandler):
                     break
                 self.wfile.write(chunk)
 
+    def _ringtone(self, track_id, query):
+        """Passage d'une musique pour une sonnerie : decoupe par ffmpeg avec fondus (40 s au plus)."""
+        try:
+            start = max(0, int((query.get("start") or ["0"])[0])) / 1000
+            end = int((query.get("end") or ["0"])[0]) / 1000
+        except ValueError:
+            self._send(400)
+            return
+        length = end - start
+        path = self.sync._library.get_track_path(track_id) if track_id in self.sync._library.phone_track_ids() else None
+        if not path or not config.FFMPEG or not 0.5 <= length <= 40:
+            self._send(404)  # le telephone decoupe alors lui-meme
+            return
+        fade_out = min(1.0, length / 4)
+        result = subprocess.run(
+            [config.FFMPEG, "-hide_banner", "-loglevel", "error", "-ss", f"{start:.3f}", "-t", f"{length:.3f}", "-i", path,
+             "-vn", "-af", f"afade=t=in:st=0:d={min(0.4, length / 4):.2f},afade=t=out:st={length - fade_out:.3f}:d={fade_out:.2f}",
+             "-c:a", "libmp3lame", "-q:a", "2", "-f", "mp3", "-"],
+            capture_output=True, timeout=60, creationflags=0x08000000 if sys.platform == "win32" else 0)
+        if result.returncode != 0 or not result.stdout:
+            log.warning("Sonnerie impossible : %s", result.stderr.decode("utf-8", "replace")[-300:])
+            self._send(500)
+            return
+        self._send(200, result.stdout, "audio/mpeg")
+
     def do_GET(self):
         path = self.path.split("?", 1)[0]
         try:
@@ -514,6 +540,10 @@ class _SyncHandler(http.server.BaseHTTPRequestHandler):
                 return
             if path == "/sync/downloads":
                 self._json(200, {"jobs": self.sync.phone_jobs()})
+                return
+            match = re.fullmatch(r"/sync/ringtone/(\d+)", path)
+            if match:
+                self._ringtone(int(match.group(1)), query)
                 return
             match = re.fullmatch(r"/sync/lyrics/(\d+)", path)
             if match:

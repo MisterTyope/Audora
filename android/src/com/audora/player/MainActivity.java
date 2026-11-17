@@ -5,6 +5,8 @@ import android.app.Activity;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
+import android.media.AudioAttributes;
+import android.media.MediaPlayer;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -143,6 +145,67 @@ public class MainActivity extends Activity implements PlayerService.Listener {
     }
 
     /** Fonctions appelables depuis le JavaScript : window.Android.xxx(). */
+    // --- Sonneries : ecoute du passage choisi, puis creation (voir Ringtones.java) ---
+
+    private MediaPlayer snippetPlayer;
+    private final android.os.Handler snippetHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+    private Uri lastRingtone;
+    private String lastRingtoneType;
+
+    private void stopSnippet() {
+        snippetHandler.removeCallbacksAndMessages(null);
+        if (snippetPlayer != null) {
+            try { snippetPlayer.release(); } catch (Exception ignored) { }
+            snippetPlayer = null;
+        }
+    }
+
+    private void playSnippet(int id, int startMs, int durationMs) {
+        stopSnippet();
+        JSONObject track = Library.get(this).track(id);
+        if (track == null) return;
+        command(PlayerService.ACTION_PAUSE, null);  // la musique en cours s'arrete pendant l'ecoute
+        try {
+            snippetPlayer = new MediaPlayer();
+            snippetPlayer.setAudioAttributes(new AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build());
+            snippetPlayer.setDataSource(Library.get(this).audioFile(track).getPath());
+            snippetPlayer.setOnPreparedListener(mp -> {
+                mp.seekTo(startMs);
+                mp.start();
+                snippetHandler.postDelayed(() -> { stopSnippet(); emit("snippet_end", "null"); }, durationMs);
+            });
+            snippetPlayer.prepareAsync();
+        } catch (Exception e) {
+            stopSnippet();
+        }
+    }
+
+    private void createRingtone(int id, long startMs, long endMs, String type) {
+        new Thread(() -> {
+            JSONObject result = new JSONObject();
+            try {
+                JSONObject track = Library.get(this).track(id);
+                if (track == null) throw new Exception("Ce titre n'est plus sur le téléphone.");
+                if (endMs <= startMs || endMs - startMs > Ringtones.MAX_MS) throw new Exception("Passage de 40 secondes au plus.");
+                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q
+                        && checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+                    runOnUiThread(() -> requestPermissions(new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, 2));
+                    throw new Exception("Autorise Audora à enregistrer des fichiers, puis touche à nouveau « Créer ».");
+                }
+                Object[] cut = Ringtones.cut(this, track, startMs, endMs);
+                Uri uri = Ringtones.install(this, (File) cut[0], track.optString("title"), type);
+                lastRingtone = uri;
+                lastRingtoneType = type;
+                boolean applied = Ringtones.setDefault(this, uri, type);
+                result.put("ok", true).put("type", type).put("applied", applied).put("fades", "pc".equals(cut[1]));
+            } catch (Exception e) {
+                try { result.put("ok", false).put("message", e.getMessage()); } catch (Exception ignored) { }
+            }
+            emit("ringtone", result.toString());
+        }).start();
+    }
+
     class Bridge {
         @JavascriptInterface
         public String library() {
@@ -276,6 +339,35 @@ public class MainActivity extends Activity implements PlayerService.Listener {
         public void moveInQueue(int from, int to) {
             PlayerService service = PlayerService.instance;
             if (service != null) service.moveInQueue(from, to);
+        }
+
+        /** Ecoute d'un passage (pour choisir une sonnerie). */
+        @JavascriptInterface
+        public void previewSnippet(int id, int startMs, int durationMs) {
+            runOnUiThread(() -> playSnippet(id, startMs, durationMs));
+        }
+
+        @JavascriptInterface
+        public void stopSnippet() {
+            runOnUiThread(MainActivity.this::stopSnippet);
+        }
+
+        /** type : "ringtone", "notification" ou "alarm". Le resultat arrive dans l'evenement "ringtone". */
+        @JavascriptInterface
+        public void createRingtone(int id, double startMs, double endMs, String type) {
+            MainActivity.this.createRingtone(id, (long) startMs, (long) endMs, type);
+        }
+
+        /** Ouvre le reglage "Modifier les parametres systeme" pour Audora. */
+        @JavascriptInterface
+        public void openWriteSettings() {
+            startActivity(new Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS, Uri.parse("package:" + getPackageName())));
+        }
+
+        /** Applique la derniere sonnerie creee (apres avoir donne l'autorisation). */
+        @JavascriptInterface
+        public boolean applyLastRingtone() {
+            return lastRingtone != null && Ringtones.setDefault(MainActivity.this, lastRingtone, lastRingtoneType);
         }
 
         /** Paroles enregistrees d'un titre ("" s'il n'y en a pas). */
