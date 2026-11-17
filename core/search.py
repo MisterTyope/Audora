@@ -3,7 +3,9 @@
 import re
 import threading
 import time
+import urllib.error
 import urllib.parse
+import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 
 from yt_dlp import YoutubeDL
@@ -110,7 +112,7 @@ def _remember(video_id, info):
     with _cache_lock:
         _details_cache[video_id] = {"year": _year(info)}
         if info.get("url"):
-            _stream_cache[video_id] = (info["url"], time.time())
+            _stream_cache[video_id] = (info["url"], time.time(), dict(info.get("http_headers") or {}))
 
 
 def _deezer_year(artist, title):
@@ -162,16 +164,50 @@ def details(video_ids):
     return {v: _details_cache.get(v, {"year": None}) for v in ids}
 
 
-def stream_url(video_id):
-    """Lien direct vers l'audio d'une video, pour l'ecouter en apercu sans la telecharger."""
+def _link_works(url, headers):
+    """YouTube accepte-t-il vraiment ce lien ? (il refuse parfois, voir stream_source)"""
+    request = urllib.request.Request(url, headers={**headers, "Range": "bytes=0-1"})
+    try:
+        with urllib.request.urlopen(request, timeout=10) as response:
+            return response.status in (200, 206)
+    except (urllib.error.URLError, OSError):
+        return False
+
+
+# Formats audio a essayer, du meilleur pour l'apercu au moins bon (m4a d'abord : lu partout).
+_PREVIEW_ITAGS = ("140", "251", "250", "139", "249")
+
+
+def stream_source(video_id, check=True):
+    """(lien direct, en-tetes a envoyer) de l'audio d'une video, verifie aupres de YouTube.
+
+    YouTube refuse parfois un lien que yt-dlp vient d'obtenir (format reserve a un client,
+    ou trop de requetes depuis cette connexion) : on verifie chaque lien et on essaie les
+    autres formats audio avant d'abandonner, avec un message clair.
+    """
     if not re.fullmatch(r"[\w-]{6,20}", str(video_id)):
         raise ValueError("Video inconnue")
     with _cache_lock:
         cached = _stream_cache.get(video_id)
-    if cached and time.time() - cached[1] < STREAM_TTL:
-        return cached[0]
+    if cached and time.time() - cached[1] < STREAM_TTL and (not check or _link_works(cached[0], cached[2])):
+        return cached[0], cached[2]
     info = _full_info(video_id)
     _remember(video_id, info)
-    if not info.get("url"):
-        raise ValueError("Aperçu indisponible pour cette vidéo.")
-    return info["url"]
+    formats = [f for f in info.get("formats") or [] if f.get("url") and f.get("protocol") in ("https", "http")
+               and f.get("vcodec") in (None, "none") and f.get("acodec") not in (None, "none")]
+    formats.sort(key=lambda f: _PREVIEW_ITAGS.index(f["format_id"]) if f["format_id"] in _PREVIEW_ITAGS else 99)
+    if info.get("url"):
+        formats.insert(0, {"url": info["url"], "http_headers": info.get("http_headers")})
+    for f in formats[:6]:
+        headers = dict(f.get("http_headers") or {})
+        if _link_works(f["url"], headers):
+            with _cache_lock:
+                _stream_cache[video_id] = (f["url"], time.time(), headers)
+            return f["url"], headers
+    raise ValueError("YouTube refuse l'aperçu pour le moment (souvent après beaucoup de recherches "
+                     "ou d'aperçus d'affilée) : réessaie dans quelques minutes. Le téléchargement, lui, reste possible.")
+
+
+def stream_url(video_id):
+    """Lien direct vers l'audio d'une video, pour l'ecouter en apercu sans la telecharger."""
+    return stream_source(video_id)[0]

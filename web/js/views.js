@@ -369,9 +369,9 @@ async function startPreview(id) {
   Object.assign(previewState, { id, loading: true });
   renderYtResults();
   try {
-    const url = await api("preview_stream", id);
+    await api("preview_stream", id);  // trouve le lien (et signale une erreur clairement)
     if (previewState.id !== id) return;
-    previewAudio.src = url;
+    previewAudio.src = `/preview/${encodeURIComponent(id)}`;  // relaye par Audora, voir core/server.py
     previewAudio.volume = media.volume;
     // On commence vers le premier tiers : c'est souvent là que le morceau "démarre" vraiment.
     const start = result.duration ? Math.min(result.duration * 0.3, Math.max(0, result.duration - PREVIEW_SECONDS)) : 0;

@@ -7,7 +7,9 @@ import re
 import socket
 import sys
 import threading
+import urllib.error
 import urllib.parse
+import urllib.request
 
 from . import config
 from .downloads import is_youtube_url
@@ -129,6 +131,11 @@ class _Handler(http.server.BaseHTTPRequestHandler):
                 self._serve_file(self.app.library.get_track_path(int(match.group(1))), allow_range=True)
                 return
 
+            match = re.fullmatch(r"/preview/([\w-]{6,20})", path)
+            if match:
+                self._serve_preview(match.group(1))
+                return
+
             match = re.fullmatch(r"/cover/(\d+)", path)
             if match:
                 self._serve_file(self.app.library.get_cover_path(int(match.group(1))), cache=True)
@@ -137,6 +144,41 @@ class _Handler(http.server.BaseHTTPRequestHandler):
             self._serve_static(path)
         except (ConnectionError, BrokenPipeError):
             pass  # le lecteur coupe souvent la connexion quand on avance dans un morceau
+
+    def _serve_preview(self, video_id):
+        """Apercu d'un resultat YouTube : Audora va chercher l'audio avec les en-tetes que YouTube
+        exige pour ce lien, et le relaie a la fenetre (avancer dans l'apercu compris)."""
+        from . import search as youtube
+        try:
+            url, headers = youtube.stream_source(video_id, check=False)  # deja verifie par preview_stream
+        except Exception as exc:
+            self._send(502, json.dumps({"error": str(exc)[:200]}).encode("utf-8"))
+            return
+        headers = dict(headers)
+        if self.headers.get("Range"):
+            headers["Range"] = self.headers["Range"]
+        try:
+            upstream = urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=20)
+        except urllib.error.HTTPError as exc:
+            self._send(exc.code if exc.code in (403, 404, 416) else 502)
+            return
+        except OSError:
+            self._send(502)
+            return
+        with upstream:
+            self.send_response(upstream.status)
+            for key in ("Content-Type", "Content-Length", "Content-Range", "Accept-Ranges"):
+                if upstream.headers.get(key):
+                    self.send_header(key, upstream.headers[key])
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            if self.command == "HEAD":
+                return
+            while True:
+                chunk = upstream.read(_CHUNK)
+                if not chunk:
+                    break
+                self.wfile.write(chunk)
 
     def _serve_static(self, path):
         relative = "index.html" if path in ("", "/") else path.lstrip("/")
