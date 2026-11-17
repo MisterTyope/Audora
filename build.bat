@@ -4,7 +4,7 @@ rem L'apk est integre a Audora : la page Telephone le propose au telephone par l
 cd /d "%~dp0"
 python -m pip install --upgrade -r requirements.txt pyinstaller
 python android\build_apk.py || goto :error
-python -m PyInstaller --noconfirm --onedir --windowed --name Audora --icon icon.ico --add-data "web;web" --add-data "icon.ico;." --add-data "dist\Audora.apk;." --add-data "dist\Audora.json;." app.py || goto :error
+python -m PyInstaller --noconfirm --onedir --windowed --name Audora --icon icon.ico --add-data "web;web" --add-data "icon.ico;." --add-data "dist\Audora.apk;." --add-data "dist\Audora.json;." --collect-data yt_dlp_ejs app.py || goto :error
 echo.
 echo Termine : dist\Audora\Audora.exe
 pause
