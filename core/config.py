@@ -72,6 +72,16 @@ BRIDGE_PORT = 47935
 # certificat ajoute seulement au magasin Windows : on utilise donc celui de Windows.
 YTDLP_BASE_OPTS = {"compat_opts": {"no-certifi"}}
 
+# Mais un Windows neuf n'a pas encore tous les certificats racine : il ne les telecharge qu'a la
+# demande, quand un navigateur en a besoin. Sans eux, Audora ne pouvait rien telecharger sur un
+# PC neuf (CERTIFICATE_VERIFY_FAILED). On ajoute donc la liste de reference (certifi, embarquee) :
+# Python et yt-dlp chargent alors le magasin Windows ET cette liste.
+try:
+    import certifi
+    os.environ.setdefault("SSL_CERT_FILE", certifi.where())
+except ImportError:
+    pass
+
 # Programmes embarques dans le .exe (voir vendor_tools.py) : ffmpeg/ffprobe (conversion,
 # decoupe, volume) et Node.js (moteur JavaScript que YouTube exige pour donner tous ses
 # formats). A defaut (lancement depuis les sources), ceux installes sur le PC.
