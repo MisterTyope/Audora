@@ -4,4 +4,4 @@ VERSION = "1.3.0"
 
 # Depot GitHub public ou sont publiees les versions ("proprietaire/depot"), pour les mises a
 # jour automatiques. Vide : pas de mise a jour automatique (voir core/updater.py).
-UPDATE_REPO = ""
+UPDATE_REPO = "MisterTyope/Audora"

@@ -29,7 +29,12 @@ SDK = os.environ.get("ANDROID_SDK_ROOT") or os.path.join(TOOLS, "android-sdk")
 BUILD_TOOLS = sorted(glob.glob(os.path.join(SDK, "build-tools", "*")))[-1]
 ANDROID_JAR = sorted(glob.glob(os.path.join(SDK, "platforms", "android-*", "android.jar")))[-1]
 KEYSTORE = os.path.join(HERE, "audora.keystore")
-KEY_ALIAS, KEY_PASS = "audora", "audora-local"
+KEY_ALIAS = "audora"
+# Mot de passe de la cle : variable AUDORA_KEYSTORE_PASS, sinon fichier android/keystore-pass.txt
+# (non publie, comme la cle elle-meme : voir .gitignore).
+_PASS_FILE = os.path.join(HERE, "keystore-pass.txt")
+KEY_PASS = os.environ.get("AUDORA_KEYSTORE_PASS") or (
+    open(_PASS_FILE, encoding="utf-8").read().strip() if os.path.exists(_PASS_FILE) else "")
 MIN_SDK, TARGET_SDK = 26, 34
 VERSION_NAME = "1.3"
 
